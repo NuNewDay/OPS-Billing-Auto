@@ -331,41 +331,67 @@
       font-family: 'Prompt', sans-serif;
     }
 
-    /* ─── Run Button ─── */
-    #run-btn {
-      width: 100%;
-      padding: 16px;
+    /* ─── Run Buttons (Dual Mode) ─── */
+    .run-btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 640px) {
+      .run-btn-group {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn-action {
+      padding: 16px 20px;
       border: none;
       border-radius: var(--radius);
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
       color: #fff;
       font-family: 'Prompt', sans-serif;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.25s;
-      box-shadow: 0 4px 24px rgba(79, 158, 255, 0.3);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      margin-top: 20px;
       letter-spacing: 0.02em;
     }
 
-    #run-btn:hover:not(:disabled) {
+    .btn-action:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 6px 32px rgba(79, 158, 255, 0.45);
     }
 
-    #run-btn:active:not(:disabled) {
+    .btn-action:active:not(:disabled) {
       transform: translateY(0);
     }
 
-    #run-btn:disabled {
+    .btn-action:disabled {
       opacity: 0.45;
       cursor: not-allowed;
       transform: none;
+    }
+
+    .btn-batch {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.35);
+    }
+
+    .btn-batch:hover:not(:disabled) {
+      box-shadow: 0 6px 28px rgba(59, 130, 246, 0.5);
+    }
+
+    .btn-individual {
+      background: linear-gradient(135deg, #10b981, #059669);
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-individual:hover:not(:disabled) {
+      box-shadow: 0 6px 28px rgba(16, 185, 129, 0.5);
     }
 
     /* ─── Progress Section ─── */
@@ -889,7 +915,7 @@
       style="margin-bottom:12px; padding:12px 16px; background:rgba(30,41,59,0.55); border:1px solid var(--border); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
       <label
         style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px; color:var(--text-1); user-select:none;">
-        <input type="checkbox" id="cfg-simulation" checked
+        <input type="checkbox" id="cfg-simulation"
           style="width:17px; height:17px; accent-color:var(--accent); cursor:pointer;" />
         <span>🧪 <strong>โหมดทดสอบจำลอง (Simulation Mode)</strong> — ทดสอบ Flow การออกบิลทุกขั้นตอนเสมือนจริงจนจบและได้
           Excel โดยไม่ยิง API ปลายทาง</span>
@@ -900,11 +926,18 @@
       </span>
     </div>
 
-    <!-- ── Run Button ── -->
-    <button id="run-btn" disabled onclick="startRun()">
-      <span id="run-icon">🚀</span>
-      <span id="run-label">START RUN BILL</span>
-    </button>
+    <!-- ── Run Buttons (Dual Mode) ── -->
+    <div class="run-btn-group">
+      <button id="run-batch-btn" class="btn-action btn-batch" disabled onclick="startRun('batch')">
+        <span class="btn-icon">📦</span>
+        <span class="btn-label">ออกบิลแบบรวม (1 ไฟล์ = 1 บิล)</span>
+      </button>
+
+      <button id="run-single-btn" class="btn-action btn-individual" disabled onclick="startRun('individual')">
+        <span class="btn-icon">⚡</span>
+        <span class="btn-label">ออกบิลแบบแยก (1 BA = 1 บิล)</span>
+      </button>
+    </div>
 
     <!-- ── Progress Section ── -->
     <div id="progress-section" style="margin-top:24px;">
@@ -913,7 +946,7 @@
       <div class="summary-bar">
         <div class="stat-box total">
           <div class="stat-num" id="stat-total">0</div>
-          <div class="stat-label">ทั้งหมด</div>
+          <div class="stat-label">บิลทั้งหมด</div>
         </div>
         <div class="stat-box prog">
           <div class="stat-num" id="stat-prog">0</div>
@@ -1023,12 +1056,11 @@
             showAlert('upload-alert', '❌ ไม่พบ BA Number ในไฟล์ กรุณาตรวจสอบรูปแบบ', true);
             return;
           }
-
           baRows = rows;
           sessionId = 'local-' + Date.now();
           renderPreview(rows);
           showAlert('upload-success', `✅ อ่านไฟล์สำเร็จ — พบ ${rows.length} BA`, true);
-          document.getElementById('run-btn').disabled = false;
+          enableRunButtons(true);
           log('ok', `อ่านไฟล์ "${file.name}" สำเร็จ — พบ ${rows.length} BA`);
         } catch (err) {
           showAlert('upload-alert', `❌ อ่านไฟล์ไม่ได้: ${err.message}`, true);
@@ -1079,32 +1111,64 @@
       { key: 'GentProduction', label: 'Production' },
     ];
 
+    function createBatchCard(totalBAs) {
+      const list = document.getElementById('ba-progress-list');
+      list.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'ba-card running';
+      div.id = 'card-batch';
+      div.innerHTML = `
+        <div class="ba-header">
+          <div class="ba-num">📦 ออกบิล (1 ไฟล์ = 1 บิล) <span class="ba-idx">รวม ${totalBAs} BA</span></div>
+          <div class="ba-status-icon" id="icon-batch">⏳</div>
+        </div>
+        <div class="step-row" id="steps-batch">
+          ${STEPS.map(s => `
+            <div class="step-pill" id="pill-batch-${s.key}">
+              <div class="dot"></div>${s.label}
+            </div>`).join('')}
+        </div>
+        <div class="ba-detail visible" id="detail-batch" style="display:none;"></div>
+      `;
+      list.appendChild(div);
+    }
+
     function createBACard(ba, index, total) {
+      const list = document.getElementById('ba-progress-list');
       const div = document.createElement('div');
       div.className = 'ba-card running';
       div.id = `card-${ba}`;
       div.innerHTML = `
-    <div class="ba-header">
-      <div class="ba-num">${ba} <span class="ba-idx">#${index}/${total}</span></div>
-      <div class="ba-status-icon" id="icon-${ba}">⏳</div>
-    </div>
-    <div class="step-row" id="steps-${ba}">
-      ${STEPS.map(s => `
-        <div class="step-pill" id="pill-${ba}-${s.key}">
-          <div class="dot"></div>${s.label}
-        </div>`).join('')}
-    </div>
-    <div class="ba-detail" id="detail-${ba}"></div>
-  `;
-      document.getElementById('ba-progress-list').appendChild(div);
+        <div class="ba-header">
+          <div class="ba-num">⚡ BA: ${ba} <span class="ba-idx">#${index}/${total}</span></div>
+          <div class="ba-status-icon" id="icon-${ba}">⏳</div>
+        </div>
+        <div class="step-row" id="steps-${ba}">
+          ${STEPS.map(s => `
+            <div class="step-pill" id="pill-${ba}-${s.key}">
+              <div class="dot"></div>${s.label}
+            </div>`).join('')}
+        </div>
+        <div class="ba-detail visible" id="detail-${ba}" style="display:none;"></div>
+      `;
+      list.appendChild(div);
       baCardMap[ba] = { el: div };
     }
 
     function updateStepPill(ba, step, status) {
-      const pill = document.getElementById(`pill-${ba}-${step}`);
+      const pillId = ba ? `pill-${ba}-${step}` : `pill-batch-${step}`;
+      const pill = document.getElementById(pillId);
       if (pill) {
         pill.className = 'step-pill ' + status;
       }
+    }
+
+    function updateBatchCard(status) {
+      const card = document.getElementById('card-batch');
+      const icon = document.getElementById('icon-batch');
+      if (!card) return;
+      card.className = 'ba-card ' + status;
+      icon.textContent = status === 'success' ? '✅' : status === 'error' ? '❌' : '⏳';
     }
 
     function updateBACard(ba, status) {
@@ -1116,13 +1180,57 @@
     }
 
     function showDetail(ba, data) {
-      const d = document.getElementById(`detail-${ba}`);
+      const detailId = ba ? `detail-${ba}` : `detail-batch`;
+      const d = document.getElementById(detailId);
       if (!d || !data) return;
       const rows = Object.entries(data)
         .map(([k, v]) => `<tr><td>${k}</td><td>${v ?? '—'}</td></tr>`)
         .join('');
       d.innerHTML = `<table>${rows}</table>`;
-      d.classList.add('visible');
+      d.style.display = 'block';
+    }
+
+    function enableRunButtons(enable = true) {
+      const bBtn = document.getElementById('run-batch-btn');
+      const sBtn = document.getElementById('run-single-btn');
+      if (bBtn) bBtn.disabled = !enable;
+      if (sBtn) sBtn.disabled = !enable;
+    }
+
+    function setButtonsRunning(activeMode, isSimulation) {
+      const bBtn = document.getElementById('run-batch-btn');
+      const sBtn = document.getElementById('run-single-btn');
+      if (bBtn) {
+        bBtn.disabled = true;
+        if (activeMode === 'batch') {
+          bBtn.innerHTML = `<span class="spin"></span><span>กำลังรันรวม${isSimulation ? ' (จำลอง)...' : '...'}</span>`;
+        }
+      }
+      if (sBtn) {
+        sBtn.disabled = true;
+        if (activeMode === 'individual') {
+          sBtn.innerHTML = `<span class="spin"></span><span>กำลังรันแยก${isSimulation ? ' (จำลอง)...' : '...'}</span>`;
+        }
+      }
+    }
+
+    function resetRunButtons() {
+      const bBtn = document.getElementById('run-batch-btn');
+      const sBtn = document.getElementById('run-single-btn');
+      const canEnable = baRows.length > 0;
+      if (bBtn) {
+        bBtn.disabled = !canEnable;
+        bBtn.innerHTML = `<span class="btn-icon">📦</span><span class="btn-label">ออกบิลแบบรวม (1 ไฟล์ = 1 บิล)</span>`;
+      }
+      if (sBtn) {
+        sBtn.disabled = !canEnable;
+        sBtn.innerHTML = `<span class="btn-icon">⚡</span><span class="btn-label">ออกบิลแบบแยก (1 BA = 1 บิล)</span>`;
+      }
+      const badge = document.getElementById('status-badge');
+      if (badge && !badge.textContent.includes('สำเร็จ') && !badge.textContent.includes('ล้มเหลว')) {
+        badge.textContent = 'พร้อมใช้งาน';
+        badge.style.color = 'var(--accent)';
+      }
     }
 
     // ═══════════════════════════════════════════════════════
@@ -1139,7 +1247,7 @@
       renderPreview(sampleBAs);
       showAlert('upload-alert', '', false);
       showAlert('upload-success', `🧪 โหลดข้อมูลทดสอบสำเร็จ — พบ ${sampleBAs.length} BA พร้อมรัน`, true);
-      document.getElementById('run-btn').disabled = false;
+      enableRunButtons(true);
       log('info', `🧪 โหลดชุดข้อมูลทดสอบ ${sampleBAs.length} BA เข้าสู่ระบบเรียบร้อย`);
     }
 
@@ -1183,7 +1291,7 @@
     // ═══════════════════════════════════════════════════════
     //  Start Run
     // ═══════════════════════════════════════════════════════
-    async function startRun() {
+    async function startRun(mode = 'batch') {
       const url02 = document.getElementById('cfg-url02').value.trim();
       const env = document.getElementById('cfg-env').value;
       const user = document.getElementById('cfg-user').value.trim();
@@ -1205,43 +1313,65 @@
       document.getElementById('log-body').innerHTML = '';
       logCount = 0;
       baCardMap = {};
-      stats = { total: baRows.length, prog: 0, ok: 0, fail: 0 };
+      stats = { total: mode === 'batch' ? 1 : baRows.length, prog: 0, ok: 0, fail: 0 };
       updateStats();
 
-      document.getElementById('run-btn').disabled = true;
-      document.getElementById('run-btn').innerHTML = `<span class="spin"></span><span>กำลังรัน${isSimulation ? ' (จำลอง)...' : '...'}</span>`;
+      setButtonsRunning(mode, isSimulation);
       document.getElementById('progress-section').style.display = 'block';
       document.getElementById('dl-btn').style.display = 'none';
       document.getElementById('reset-btn').style.display = 'none';
       document.getElementById('status-badge').textContent = isSimulation ? 'กำลังรัน (โหมดจำลอง)' : 'กำลังรัน...';
       document.getElementById('status-badge').style.color = 'var(--warn)';
 
-      log('start', `เริ่ม Session${isSimulation ? ' [โหมดทดสอบจำลอง]' : ''} — ${baRows.length} BA | ENV: ${env}`);
+      const modeText = mode === 'batch' ? 'ออกบิลรวม (1 ไฟล์ = 1 บิล)' : 'ออกบิลแยก (1 BA = 1 บิล)';
+      log('start', `เริ่ม Session${isSimulation ? ' [โหมดทดสอบจำลอง]' : ''} — ${modeText} | ${baRows.length} BA | ENV: ${env}`);
 
       const config = { url02, environment: env, createBy: user, uuid, suffix, isSimulation };
 
       // Open SSE
       if (eventSource) eventSource.close();
       eventSource = new EventSource(`/api/stream/${sessionId}`);
-      eventSource.onmessage = e => handleSSE(JSON.parse(e.data));
-      eventSource.onerror = () => { log('err', 'SSE connection error'); };
 
-      // POST to run
-      try {
-        const res = await fetch('/api/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, bas: baRows, config }),
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          log('err', 'Server error: ' + err.error);
+      let runStarted = false;
+      const sendRunRequest = async () => {
+        if (runStarted) return;
+        runStarted = true;
+        try {
+          const res = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, bas: baRows, config, mode }),
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            log('err', 'Server error: ' + err.error);
+            resetRunButtons();
+          }
+        } catch (err) {
+          log('err', 'Cannot reach server: ' + err.message);
+          resetRunButtons();
         }
-      } catch (err) {
-        log('err', 'Cannot reach server: ' + err.message);
-        document.getElementById('run-btn').disabled = false;
-        document.getElementById('run-btn').innerHTML = `<span>🚀</span><span>รันออกบิลอัตโนมัติ</span>`;
-      }
+      };
+
+      eventSource.onmessage = e => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'connected') {
+            sendRunRequest();
+          }
+          handleSSE(data);
+        } catch (parseErr) {
+          // ignore keepalive pings
+        }
+      };
+
+      eventSource.onerror = () => {
+        // SSE auto-reconnects in background, log as warning only
+        console.warn('SSE stream re-connecting...');
+      };
+
+      // Fallback: start run if connected event takes longer than 600ms
+      setTimeout(sendRunRequest, 600);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -1253,16 +1383,31 @@
           log('info', 'SSE connected — Session: ' + e.sessionId);
           break;
 
+        case 'run_fatal_error':
+          log('err', '❌ ข้อผิดพลาดร้ายแรง: ' + e.message);
+          resetRunButtons();
+          break;
+
         case 'run_start':
-          log('start', e.message);
+          if (e.mode === 'individual') {
+            stats = { total: e.total || baRows.length, prog: 0, ok: 0, fail: 0 };
+            updateStats();
+            log('start', e.message);
+          } else {
+            createBatchCard(e.totalBAs || baRows.length);
+            stats = { total: 1, prog: 1, ok: 0, fail: 0 };
+            updateStats();
+            baRows.forEach(r => updatePreviewStatus(r.ba, 'running'));
+            log('start', e.message);
+          }
           break;
 
         case 'ba_start':
           createBACard(e.ba, e.index, e.total);
-          updatePreviewStatus(e.ba, 'running');
           stats.prog++;
           updateStats();
-          log('start', `[${e.ba}] เริ่ม (#${e.index}/${e.total})`);
+          updatePreviewStatus(e.ba, 'running');
+          log('start', `[${e.index}/${e.total}] เริ่มประมวลผล BA: ${e.ba}`);
           break;
 
         case 'step_start':
@@ -1273,26 +1418,45 @@
         case 'step_done':
           updateStepPill(e.ba, e.step, 'success');
           if (e.data) showDetail(e.ba, e.data);
-          log('ok', `[${e.ba}] ✓ ${e.step}`);
+          log('ok', `✓ ${e.ba ? `[${e.ba}] ` : ''}${e.step}`);
           break;
 
         case 'ba_complete':
           updateBACard(e.ba, 'success');
-          updatePreviewStatus(e.ba, 'success');
           stats.prog = Math.max(0, stats.prog - 1);
           stats.ok++;
           updateStats();
-          log('ok', `[${e.ba}] ✅ สำเร็จทุกขั้นตอน`);
+          updatePreviewStatus(e.ba, 'success');
+          log('ok', `✅ สำเร็จ! BA: ${e.ba} | Bill Order: ${e.result?.billOrderNumber || '-'}`);
           break;
 
         case 'ba_error':
           if (e.step) updateStepPill(e.ba, e.step, 'error');
           updateBACard(e.ba, 'error');
-          updatePreviewStatus(e.ba, 'error');
           stats.prog = Math.max(0, stats.prog - 1);
           stats.fail++;
           updateStats();
-          log('err', `[${e.ba}] ❌ ${e.step}: ${e.message}`);
+          updatePreviewStatus(e.ba, 'error');
+          log('err', `❌ [${e.ba}] ${e.step || 'Error'}: ${e.message}`);
+          break;
+
+        case 'batch_complete':
+          updateBatchCard('success');
+          stats.prog = 0;
+          stats.ok = 1;
+          updateStats();
+          baRows.forEach(r => updatePreviewStatus(r.ba, 'success'));
+          log('ok', `✅ สำเร็จ! ออกบิล 1 บิลเรียบร้อยสำหรับทั้ง ${e.result?.count || baRows.length} BA`);
+          break;
+
+        case 'batch_error':
+          if (e.step) updateStepPill(null, e.step, 'error');
+          updateBatchCard('error');
+          stats.prog = 0;
+          stats.fail = 1;
+          updateStats();
+          baRows.forEach(r => updatePreviewStatus(r.ba, 'error'));
+          log('err', `❌ ${e.step || 'Error'}: ${e.message}`);
           break;
 
         case 'all_done':
@@ -1307,15 +1471,20 @@
             log('ok', `💾 บันทึกไฟล์ Excel ไปที่ ${e.savedPath} เรียบร้อยแล้ว`);
           }
 
-          document.getElementById('run-btn').innerHTML = `<span>✅</span><span>เสร็จสิ้น</span>`;
-          document.getElementById('status-badge').textContent = `✅ ${e.success}/${e.total} สำเร็จ`;
-          document.getElementById('status-badge').style.color = e.failed === 0 ? 'var(--accent3)' : 'var(--warn)';
-          log('ok', `เสร็จสิ้น — สำเร็จ ${e.success}/${e.total}, ล้มเหลว ${e.failed}`);
+          const isBatch = e.mode === 'batch';
+          const badgeText = isBatch
+            ? (e.success > 0 ? `✅ สำเร็จ 1 บิล (${e.totalBAs} BA)` : `❌ ล้มเหลว`)
+            : `✅ สำเร็จ ${e.success}/${e.total} บิล`;
+          document.getElementById('status-badge').textContent = badgeText;
+          document.getElementById('status-badge').style.color = e.success > 0 ? 'var(--accent3)' : 'var(--danger)';
+
+          resetRunButtons();
+          log('ok', `เสร็จสิ้นกระบวนการ — สำเร็จ ${e.success}/${e.total} รายการ`);
 
           // Notification
           if (Notification.permission === 'granted') {
             new Notification('OPS Billing Auto', {
-              body: `เสร็จสิ้น! สำเร็จ ${e.success}/${e.total} BA`,
+              body: `เสร็จสิ้น! ${badgeText}`,
               icon: '⚡'
             });
           }
@@ -1388,8 +1557,8 @@
       document.getElementById('progress-section').style.display = 'none';
       document.getElementById('save-location-info').style.display = 'none';
       document.getElementById('open-folder-btn').style.display = 'none';
-      document.getElementById('run-btn').disabled = true;
-      document.getElementById('run-btn').innerHTML = `<span>🚀</span><span>รันออกบิลอัตโนมัติ</span>`;
+      enableRunButtons(false);
+      resetRunButtons();
       document.getElementById('status-badge').textContent = 'พร้อมใช้งาน';
       document.getElementById('status-badge').style.color = '';
       showAlert('upload-alert', '', false);

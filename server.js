@@ -74,7 +74,12 @@ function addLog(sessionId, level, message, data) {
 function sendEvent(sessionId, event) {
   const client = sseClients.get(sessionId);
   if (client) {
-    client.write(`data: ${JSON.stringify(event)}\n\n`);
+    try {
+      client.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch (e) {
+      console.error(`[SSE Write Error] Session ${sessionId}:`, e.message);
+      sseClients.delete(sessionId);
+    }
   }
   addLog(sessionId, 'event', event.type, event);
 }
@@ -94,7 +99,16 @@ app.get('/api/stream/:sessionId', (req, res) => {
   res.write(`data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`);
   sseClients.set(sessionId, res);
 
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch (err) {
+      clearInterval(keepAlive);
+    }
+  }, 10000);
+
   req.on('close', () => {
+    clearInterval(keepAlive);
     sseClients.delete(sessionId);
   });
 });
@@ -176,11 +190,13 @@ app.post('/api/health-check', async (req, res) => {
   }
 });
 
-// ─── Billing flow for a single BA ────────────────────────────────────────────
+// ─── Billing flow for a single BA (1 BA = 1 Bill Order) ───────────────────────
 
-async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
-  const { url02, createBy, environment, isSimulation } = config;
-  // Normalize base URL: ตัด /home หรือ trailing slash ออกอัตโนมัติ
+async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total = 1) {
+  const { url02, createBy, uuid, environment, isSimulation } = config;
+  const creatorUuid = (uuid || '').trim() || 'f6c369a9-2197-45e5-a0b1-26aaba878703';
+  const creatorName = (createBy || '').trim() || 'นาย ทดสอบ SSO';
+
   const baseUrl = (url02 || '')
     .trim()
     .replace(/\/home\/?$/i, '')
@@ -204,17 +220,16 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
     },
   };
 
-  // ── SIMULATION / CHECK MODE ────────────────────────────────────────────────
+  // ── SIMULATION MODE ────────────────────────────────────────────────────────
   if (isSimulation) {
     try {
-      // 1. Mock Check BA
       sendEvent(sessionId, {
         type: 'step_start',
         ba,
         step: 'checkBillingAccountNew',
         message: `[${ba}] (โหมดจำลอง) ตรวจสอบ Billing Account...`,
       });
-      await sleep(800);
+      await sleep(600);
 
       result.billingAccount = ba;
       result.billCycle = '01';
@@ -235,7 +250,6 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         },
       });
 
-      // 2. Mock GentAcc
       const suffix = resolveSuffix(config.suffix, ba, index, total);
       const billOrderNumber = `01C120260925${suffix}`;
       const processId = `SIM-${Date.now().toString().slice(-6)}`;
@@ -246,7 +260,7 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         step: 'GentAcc',
         message: `[${ba}] (โหมดจำลอง) Generate Invoice: ${billOrderNumber}`,
       });
-      await sleep(800);
+      await sleep(600);
 
       result.processId = processId;
       result.billOrderNumber = billOrderNumber;
@@ -260,14 +274,13 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         data: { processId, billOrderNumber },
       });
 
-      // 3. Mock getBIP
       sendEvent(sessionId, {
         type: 'step_start',
         ba,
         step: 'getBIP',
-        message: `[${ba}] (โหมดจำลอง) รอ 2 วินาที แล้วดึงรายการ BIP...`,
+        message: `[${ba}] (โหมดจำลอง) ตรวจสอบสถานะ BIP (Process ID: ${processId})...`,
       });
-      await sleep(2000);
+      await sleep(1200);
 
       result.stepStatus.getBIP = 'success';
       sendEvent(sessionId, {
@@ -275,10 +288,9 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         ba,
         step: 'getBIP',
         status: 'success',
-        data: { processId: result.processId, billOrderNumber: result.billOrderNumber },
+        data: { processId, billOrderNumber },
       });
 
-      // 4. Mock GentProduction
       const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
       const billMode = isProduction ? 'Production' : 'Proforma';
 
@@ -288,7 +300,7 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         step: 'GentProduction',
         message: `[${ba}] (โหมดจำลอง) ออกบิล [${billMode}]...`,
       });
-      await sleep(800);
+      await sleep(600);
 
       result.stepStatus.GentProduction = 'success';
       result.status = 'success';
@@ -298,26 +310,39 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         ba,
         step: 'GentProduction',
         status: 'success',
-        data: { billMode },
+        data: { billMode, processId, billOrderNumber },
       });
 
-      sendEvent(sessionId, { type: 'ba_complete', ba, status: 'success', result });
+      sendEvent(sessionId, {
+        type: 'ba_complete',
+        ba,
+        status: 'success',
+        result,
+      });
+
       return result;
     } catch (err) {
       result.status = 'error';
       result.error = err.message;
-      sendEvent(sessionId, { type: 'ba_error', ba, status: 'error', message: err.message, result });
+      sendEvent(sessionId, {
+        type: 'ba_error',
+        ba,
+        status: 'error',
+        message: err.message,
+        result,
+      });
       return result;
     }
   }
 
+  // ── REAL MODE (1 BA = 1 บิล) ─────────────────────────────────────────────
   try {
-    // ── STEP 1: checkBillingAccountNew ───────────────────────────────────────
+    // ── STEP 1: checkBillingAccountNew
     sendEvent(sessionId, {
       type: 'step_start',
       ba,
       step: 'checkBillingAccountNew',
-      message: `[${ba}] ตรวจสอบ Billing Account...`,
+      message: `[${ba}] ตรวจสอบข้อมูล Billing Account กับระบบ OPS...`,
     });
 
     const checkRes = await axios.post(
@@ -329,11 +354,11 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         cutoff_date: '',
         confirm: true,
       },
-      { timeout: 30000 }
+      { timeout: 60000 }
     );
 
     const checkData = checkRes.data?.result?.[0];
-    if (!checkData) throw new Error('checkBillingAccountNew: ไม่พบข้อมูล result[0]');
+    if (!checkData) throw new Error(`[${ba}] checkBillingAccountNew: ไม่พบข้อมูล result จากเซิร์ฟเวอร์`);
 
     result.billingAccount = checkData.billingAccount || ba;
     result.billCycle = checkData.billCycle;
@@ -356,7 +381,7 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
       },
     });
 
-    // ── STEP 2: GentAcc ──────────────────────────────────────────────────────
+    // ── STEP 2: GentAcc
     const suffix = resolveSuffix(config.suffix, ba, index, total);
     const billOrderNumber = `${result.billCycle}${billGroupCode}${cutOff.YYYYMMDD}${suffix}`;
 
@@ -364,7 +389,7 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
       type: 'step_start',
       ba,
       step: 'GentAcc',
-      message: `[${ba}] Generate Invoice: ${billOrderNumber}`,
+      message: `[${ba}] สร้างใบแจ้งหนี้ (${billOrderNumber})...`,
     });
 
     const gentAccRes = await axios.post(
@@ -378,17 +403,20 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         hot_bil_rc: '0',
         hot_bil_nrc: '0',
         hot_bil_usage: '0',
-        create_by: createBy,
+        create_by: creatorUuid,
         confirm: false,
         list_ba_file_data: [result.billingAccount],
       },
-      { timeout: 60000 }
+      { timeout: 90000 }
     );
 
     const processId = gentAccRes.data?.result?.processId;
-    if (!processId) throw new Error('GentAcc: ไม่พบ processId ใน response');
+    if (!processId) {
+      throw new Error(gentAccRes.data?.message || `[${ba}] GentAcc: ไม่พบ processId ใน response`);
+    }
 
     result.processId = processId;
+    result.billOrderNumber = billOrderNumber;
     result.stepStatus.GentAcc = 'success';
 
     sendEvent(sessionId, {
@@ -396,35 +424,47 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
       ba,
       step: 'GentAcc',
       status: 'success',
-      data: { processId: result.processId, billOrderNumber },
+      data: { processId, billOrderNumber },
     });
 
-    // ── STEP 3: getBIP (delay 5s) ────────────────────────────────────────────
+    // ── STEP 3: getBIP (Wait 5s)
     sendEvent(sessionId, {
       type: 'step_start',
       ba,
       step: 'getBIP',
-      message: `[${ba}] รอ 5 วินาที แล้วดึงรายการ BIP...`,
+      message: `[${ba}] รอ 5 วินาที แล้วตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
     });
 
     await sleep(5000);
 
-    const bipRes = await axios.post(
-      `${baseUrl}/api/v1/gentBIP/getBIP`,
-      {
-        createBy: createBy,
-        firstLoadPage: 'F',
-        pagination: { current: 1, pageSize: 5 },
-        sorter: {},
-      },
-      { timeout: 30000 }
-    );
+    try {
+      const bipRes = await axios.post(
+        `${baseUrl}/api/v1/gentBIP/getBIP`,
+        {
+          firstLoadPage: 'T',
+          pagination: { current: 1, pageSize: 25 },
+          sorter: {},
+        },
+        { timeout: 30000 }
+      );
 
-    const bipData = bipRes.data?.result?.[0];
-    if (!bipData) throw new Error('getBIP: ไม่พบ result[0]');
+      const items = bipRes.data?.result || [];
+      const matched = Array.isArray(items)
+        ? items.find(
+            (item) =>
+              String(item.processId) === String(processId) ||
+              String(item.billOrderNumber) === String(billOrderNumber)
+          )
+        : null;
 
-    result.processId = bipData.processId || result.processId;
-    result.billOrderNumber = bipData.billOrderNumber || billOrderNumber;
+      if (matched) {
+        result.processId = matched.processId || processId;
+        result.billOrderNumber = matched.billOrderNumber || billOrderNumber;
+      }
+    } catch (bipErr) {
+      console.warn(`[${ba}] [getBIP Warning] ${bipErr.message}. Continuing with processId ${processId}`);
+    }
+
     result.stepStatus.getBIP = 'success';
 
     sendEvent(sessionId, {
@@ -438,7 +478,7 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
       },
     });
 
-    // ── STEP 4: Gent Production / Proforma ───────────────────────────────────
+    // ── STEP 4: GentProduction / Proforma
     const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
     const billMode = isProduction ? 'Production' : 'Proforma';
     const prodUrl = `${baseUrl}/api/v1/invoicing/insertOPSInvoice`;
@@ -447,7 +487,7 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
       type: 'step_start',
       ba,
       step: 'GentProduction',
-      message: `[${ba}] ออกบิล [${billMode}]...`,
+      message: `[${ba}] ออกบิล [${billMode}] ยืนยัน Process ID: ${result.processId}...`,
     });
 
     await axios.post(
@@ -458,10 +498,10 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
         task_program: 'BIP',
         bill_mode: billMode,
         bill_cycle: result.billCycle,
-        create_by: createBy,
+        create_by: creatorUuid,
         cutoff_date: cutOff.DDMMYYYY,
       },
-      { timeout: 60000 }
+      { timeout: 90000 }
     );
 
     result.stepStatus.GentProduction = 'success';
@@ -472,10 +512,15 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
       ba,
       step: 'GentProduction',
       status: 'success',
-      data: { billMode },
+      data: { billMode, processId: result.processId, billOrderNumber: result.billOrderNumber },
     });
 
-    sendEvent(sessionId, { type: 'ba_complete', ba, status: 'success', result });
+    sendEvent(sessionId, {
+      type: 'ba_complete',
+      ba,
+      status: 'success',
+      result,
+    });
   } catch (err) {
     const stepFailed = Object.keys(result.stepStatus).find(
       (s) => result.stepStatus[s] === 'pending'
@@ -501,96 +546,551 @@ async function runBillingFlow(ba, config, sessionId, index = 1, total = 1) {
   return result;
 }
 
-// ─── Run automation ───────────────────────────────────────────────────────────
+// ─── Billing flow for a file (1 File = 1 Bill Order) ──────────────────────────
+
+async function runBatchBillingFlow(baList, config, sessionId) {
+  const { url02, createBy, uuid, environment, isSimulation } = config;
+  const creatorUuid = (uuid || '').trim() || 'f6c369a9-2197-45e5-a0b1-26aaba878703';
+  const creatorName = (createBy || '').trim() || 'นาย ทดสอบ SSO';
+
+  // Normalize base URL: ตัด /home หรือ trailing slash ออกอัตโนมัติ
+  const baseUrl = (url02 || '')
+    .trim()
+    .replace(/\/home\/?$/i, '')
+    .replace(/\/+$/, '');
+
+  const count = baList.length;
+
+  const batchResult = {
+    baList,
+    count,
+    billCycle: '',
+    billGroup: '',
+    cutOffDate: '',
+    processId: '',
+    billOrderNumber: '',
+    status: 'running',
+    error: '',
+    stepStatus: {
+      checkBillingAccountNew: 'pending',
+      GentAcc: 'pending',
+      getBIP: 'pending',
+      GentProduction: 'pending',
+    },
+    items: [], // individual rows for Excel export
+  };
+
+  // ── SIMULATION MODE ────────────────────────────────────────────────────────
+  if (isSimulation) {
+    try {
+      sendEvent(sessionId, {
+        type: 'step_start',
+        step: 'checkBillingAccountNew',
+        message: `(โหมดจำลอง) ตรวจสอบข้อมูล ${count} BA ในไฟล์...`,
+      });
+      await sleep(800);
+
+      batchResult.billCycle = '01';
+      batchResult.billGroup = 'C1';
+      batchResult.cutOffDate = '25/09/2026';
+      batchResult.stepStatus.checkBillingAccountNew = 'success';
+
+      sendEvent(sessionId, {
+        type: 'step_done',
+        step: 'checkBillingAccountNew',
+        status: 'success',
+        data: {
+          totalBAs: count,
+          billCycle: batchResult.billCycle,
+          billGroup: batchResult.billGroup,
+          cutOffDate: batchResult.cutOffDate,
+        },
+      });
+
+      const suffix = resolveSuffix(config.suffix, baList[0], 1, 1);
+      const billOrderNumber = `01C120260925${suffix}`;
+      const processId = `SIM-${Date.now().toString().slice(-6)}`;
+      batchResult.billOrderNumber = billOrderNumber;
+      batchResult.processId = processId;
+
+      sendEvent(sessionId, {
+        type: 'step_start',
+        step: 'GentAcc',
+        message: `(โหมดจำลอง) สร้าง 1 บิล [${billOrderNumber}] สำหรับ ${count} BA...`,
+      });
+      await sleep(800);
+      batchResult.stepStatus.GentAcc = 'success';
+
+      sendEvent(sessionId, {
+        type: 'step_done',
+        step: 'GentAcc',
+        status: 'success',
+        data: { processId, billOrderNumber, totalBAs: count },
+      });
+
+      sendEvent(sessionId, {
+        type: 'step_start',
+        step: 'getBIP',
+        message: `(โหมดจำลอง) รอ 2 วินาที แล้วตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
+      });
+      await sleep(2000);
+      batchResult.stepStatus.getBIP = 'success';
+
+      sendEvent(sessionId, {
+        type: 'step_done',
+        step: 'getBIP',
+        status: 'success',
+        data: { processId, billOrderNumber },
+      });
+
+      const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
+      const billMode = isProduction ? 'Production' : 'Proforma';
+
+      sendEvent(sessionId, {
+        type: 'step_start',
+        step: 'GentProduction',
+        message: `(โหมดจำลอง) ยืนยันออกบิล [${billMode}]...`,
+      });
+      await sleep(800);
+
+      batchResult.stepStatus.GentProduction = 'success';
+      batchResult.status = 'success';
+
+      sendEvent(sessionId, {
+        type: 'step_done',
+        step: 'GentProduction',
+        status: 'success',
+        data: { billMode, processId, billOrderNumber },
+      });
+
+      for (const ba of baList) {
+        batchResult.items.push({
+          ba,
+          billingAccount: ba,
+          billCycle: batchResult.billCycle,
+          billGroup: batchResult.billGroup,
+          cutOffDate: batchResult.cutOffDate,
+          processId: batchResult.processId,
+          billOrderNumber: batchResult.billOrderNumber,
+          status: 'success',
+          error: '',
+        });
+      }
+
+      sendEvent(sessionId, { type: 'batch_complete', status: 'success', result: batchResult });
+      return batchResult;
+    } catch (err) {
+      batchResult.status = 'error';
+      batchResult.error = err.message;
+      sendEvent(sessionId, { type: 'batch_error', status: 'error', message: err.message, result: batchResult });
+      return batchResult;
+    }
+  }
+
+  // ── REAL MODE (1 ไฟล์ = 1 บิล) ─────────────────────────────────────────────
+  try {
+    // ── STEP 1: checkBillingAccountNew (All BAs in file)
+    sendEvent(sessionId, {
+      type: 'step_start',
+      step: 'checkBillingAccountNew',
+      message: `ตรวจสอบข้อมูล ${count} BA กับระบบ OPS...`,
+    });
+
+    const checkRes = await axios.post(
+      `${baseUrl}/api/v1/invoicing/checkBillingAccountNew`,
+      {
+        list_ba_file_data: baList,
+        bill_cycle: '',
+        bill_group: '',
+        cutoff_date: '',
+        confirm: true,
+      },
+      { timeout: 60000 }
+    );
+
+    const checkData = checkRes.data?.result?.[0];
+    if (!checkData) throw new Error('checkBillingAccountNew: ไม่พบข้อมูล result ในการตรวจสอบ BA');
+
+    batchResult.billCycle = checkData.billCycle;
+    const billGroupCode = extractBillGroupCode(checkData.billGroup);
+    batchResult.billGroup = billGroupCode;
+    const cutOff = parseCutOffDate(checkData.cutOffDate);
+    batchResult.cutOffDate = checkData.cutOffDate;
+    batchResult.stepStatus.checkBillingAccountNew = 'success';
+
+    sendEvent(sessionId, {
+      type: 'step_done',
+      step: 'checkBillingAccountNew',
+      status: 'success',
+      data: {
+        totalBAs: count,
+        billCycle: batchResult.billCycle,
+        billGroup: billGroupCode,
+        cutOffDate: checkData.cutOffDate,
+      },
+    });
+
+    // ── STEP 2: GentAcc (1 Bill Order for ALL BAs)
+    const suffix = resolveSuffix(config.suffix, baList[0], 1, 1);
+    const billOrderNumber = `${batchResult.billCycle}${billGroupCode}${cutOff.YYYYMMDD}${suffix}`;
+
+    sendEvent(sessionId, {
+      type: 'step_start',
+      step: 'GentAcc',
+      message: `สร้างใบแจ้งหนี้ 1 บิล (${billOrderNumber}) สำหรับ ${count} BA...`,
+    });
+
+    const gentAccRes = await axios.post(
+      `${baseUrl}/api/v1/invoicing/insertOPSInvoice`,
+      {
+        task_program: 'GentAcc',
+        bill_order_number: billOrderNumber,
+        bill_cycle: batchResult.billCycle,
+        bill_group: billGroupCode,
+        cutoff_date: cutOff.DDMMYYYY,
+        hot_bil_rc: '0',
+        hot_bil_nrc: '0',
+        hot_bil_usage: '0',
+        create_by: creatorUuid,
+        confirm: false,
+        list_ba_file_data: baList,
+      },
+      { timeout: 90000 }
+    );
+
+    const processId = gentAccRes.data?.result?.processId;
+    if (!processId) {
+      throw new Error(gentAccRes.data?.message || 'GentAcc: ไม่พบ processId ใน response');
+    }
+
+    batchResult.processId = processId;
+    batchResult.billOrderNumber = billOrderNumber;
+    batchResult.stepStatus.GentAcc = 'success';
+
+    sendEvent(sessionId, {
+      type: 'step_done',
+      step: 'GentAcc',
+      status: 'success',
+      data: { processId, billOrderNumber, totalBAs: count },
+    });
+
+    // ── STEP 3: getBIP (Wait 5s)
+    sendEvent(sessionId, {
+      type: 'step_start',
+      step: 'getBIP',
+      message: `รอ 5 วินาที แล้วตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
+    });
+
+    await sleep(5000);
+
+    try {
+      const bipRes = await axios.post(
+        `${baseUrl}/api/v1/gentBIP/getBIP`,
+        {
+          firstLoadPage: 'T',
+          pagination: { current: 1, pageSize: 25 },
+          sorter: {},
+        },
+        { timeout: 30000 }
+      );
+
+      const items = bipRes.data?.result || [];
+      const matched = Array.isArray(items) ? items.find(
+        (item) => String(item.processId) === String(processId) ||
+                  String(item.billOrderNumber) === String(billOrderNumber)
+      ) : null;
+
+      if (matched) {
+        batchResult.processId = matched.processId || processId;
+        batchResult.billOrderNumber = matched.billOrderNumber || billOrderNumber;
+      }
+    } catch (bipErr) {
+      console.warn(`[getBIP Warning] ${bipErr.message}. Continuing with processId ${processId}`);
+    }
+
+    batchResult.stepStatus.getBIP = 'success';
+
+    sendEvent(sessionId, {
+      type: 'step_done',
+      step: 'getBIP',
+      status: 'success',
+      data: {
+        processId: batchResult.processId,
+        billOrderNumber: batchResult.billOrderNumber,
+      },
+    });
+
+    // ── STEP 4: GentProduction / Proforma
+    const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
+    const billMode = isProduction ? 'Production' : 'Proforma';
+    const prodUrl = `${baseUrl}/api/v1/invoicing/insertOPSInvoice`;
+
+    sendEvent(sessionId, {
+      type: 'step_start',
+      step: 'GentProduction',
+      message: `ออกบิล [${billMode}] ยืนยัน Process ID: ${batchResult.processId} (1 บิล ${count} BA)...`,
+    });
+
+    await axios.post(
+      prodUrl,
+      {
+        process_id: batchResult.processId,
+        bill_order_number: batchResult.billOrderNumber,
+        task_program: 'BIP',
+        bill_mode: billMode,
+        bill_cycle: batchResult.billCycle,
+        create_by: creatorUuid,
+        cutoff_date: cutOff.DDMMYYYY,
+      },
+      { timeout: 90000 }
+    );
+
+    batchResult.stepStatus.GentProduction = 'success';
+    batchResult.status = 'success';
+
+    sendEvent(sessionId, {
+      type: 'step_done',
+      step: 'GentProduction',
+      status: 'success',
+      data: { billMode, processId: batchResult.processId, billOrderNumber: batchResult.billOrderNumber },
+    });
+
+    // Build items for all BAs in this file (they all share this 1 bill order)
+    const checkedMap = new Map((checkRes.data?.result || []).map(r => [String(r.billingAccount || ''), r]));
+    for (const ba of baList) {
+      const itemData = checkedMap.get(String(ba)) || {};
+      batchResult.items.push({
+        ba,
+        billingAccount: itemData.billingAccount || ba,
+        billCycle: itemData.billCycle || batchResult.billCycle,
+        billGroup: extractBillGroupCode(itemData.billGroup) || batchResult.billGroup,
+        cutOffDate: itemData.cutOffDate || batchResult.cutOffDate,
+        processId: batchResult.processId,
+        billOrderNumber: batchResult.billOrderNumber,
+        status: 'success',
+        error: '',
+      });
+    }
+
+    sendEvent(sessionId, { type: 'batch_complete', status: 'success', result: batchResult });
+  } catch (err) {
+    const stepFailed = Object.keys(batchResult.stepStatus).find(
+      (s) => batchResult.stepStatus[s] === 'pending'
+    );
+    if (stepFailed) batchResult.stepStatus[stepFailed] = 'error';
+    batchResult.status = 'error';
+    batchResult.error =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      err.message ||
+      'Unknown error';
+
+    for (const ba of baList) {
+      batchResult.items.push({
+        ba,
+        billingAccount: ba,
+        billCycle: batchResult.billCycle,
+        billGroup: batchResult.billGroup,
+        cutOffDate: batchResult.cutOffDate,
+        processId: batchResult.processId,
+        billOrderNumber: batchResult.billOrderNumber,
+        status: 'error',
+        error: batchResult.error,
+      });
+    }
+
+    sendEvent(sessionId, {
+      type: 'batch_error',
+      status: 'error',
+      step: stepFailed,
+      message: batchResult.error,
+      result: batchResult,
+    });
+  }
+
+  return batchResult;
+}
+
+// ─── Run automation (Supports Batch and Individual modes) ─────────────────────
 
 app.post('/api/run', async (req, res) => {
-  const { sessionId, bas, config } = req.body;
+  const { sessionId, bas, config, mode = 'batch' } = req.body;
 
   if (!sessionId || !bas || !config) {
     return res.status(400).json({ error: 'Missing sessionId, bas, or config' });
   }
 
+  const baList = bas.map(b => String(b.ba || b).trim()).filter(Boolean);
+
   // Respond immediately so client isn't waiting
-  res.json({ started: true, count: bas.length });
+  res.json({ started: true, count: baList.length, mode });
 
-  // Run in background
-  (async () => {
-    const results = [];
-    let idx = 0;
-
-    sendEvent(sessionId, {
-      type: 'run_start',
-      total: bas.length,
-      message: `เริ่มรัน ${bas.length} BA(s)...`,
-    });
-
-    for (const { ba } of bas) {
-      idx++;
+  if (mode === 'individual') {
+    // ── MODE: 1 BA = 1 Bill Order ───────────────────────────────────────────
+    (async () => {
       sendEvent(sessionId, {
-        type: 'ba_start',
-        ba,
-        index: idx,
-        total: bas.length,
+        type: 'run_start',
+        mode: 'individual',
+        total: baList.length,
+        totalBAs: baList.length,
+        message: `เริ่มประมวลผลแบบแยก (1 BA = 1 บิล) ทั้งหมด ${baList.length} รายการ...`,
       });
 
-      const result = await runBillingFlow(ba, config, sessionId, idx, bas.length);
-      results.push(result);
-    }
+      const results = [];
+      let idx = 0;
+      for (const ba of baList) {
+        idx++;
+        sendEvent(sessionId, {
+          type: 'ba_start',
+          ba,
+          index: idx,
+          total: baList.length,
+        });
 
-    // Build result Excel
-    const wb = xlsx.utils.book_new();
-    const wsData = [
-      ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
-    ];
+        const r = await runIndividualBillingFlow(ba, config, sessionId, idx, baList.length);
+        results.push(r);
+      }
 
-    for (const r of results) {
-      wsData.push([
-        r.ba,
-        r.billingAccount,
-        r.billCycle,
-        r.billGroup,
-        r.cutOffDate,
-        r.processId,
-        r.billOrderNumber,
-        r.status === 'success' ? 'Success ✅' : 'Failed ❌',
-        r.error || '',
-      ]);
-    }
+      // Build result Excel
+      const wb = xlsx.utils.book_new();
+      const wsData = [
+        ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
+      ];
 
-    const ws = xlsx.utils.aoa_to_sheet(wsData);
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
-      { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
-    ];
-    xlsx.utils.book_append_sheet(wb, ws, 'Results');
+      for (const r of results) {
+        wsData.push([
+          r.ba,
+          r.billingAccount,
+          r.billCycle,
+          r.billGroup,
+          r.cutOffDate,
+          r.processId,
+          r.billOrderNumber,
+          r.status === 'success' ? 'Success ✅' : 'Failed ❌',
+          r.error || '',
+        ]);
+      }
 
-    // Log sheet
-    const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
-    xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
+      const ws = xlsx.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [
+        { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+        { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
+      ];
+      xlsx.utils.book_append_sheet(wb, ws, 'Results');
 
-    const reportDir = path.join(__dirname, 'Data', 'Report');
-    if (!fs.existsSync(reportDir)) {
-      fs.mkdirSync(reportDir, { recursive: true });
-    }
-    const filename = `billing_results_${Date.now()}.xlsx`;
-    const fullPath = path.join(reportDir, filename);
+      // Log sheet
+      const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
+      xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
 
-    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    fs.writeFileSync(fullPath, buffer);
-    sessionResults.set(sessionId, { buffer, filename, fullPath });
+      const reportDir = path.join(__dirname, 'Data', 'Report');
+      if (!fs.existsSync(reportDir)) {
+        fs.mkdirSync(reportDir, { recursive: true });
+      }
+      const filename = `billing_results_individual_${Date.now()}.xlsx`;
+      const fullPath = path.join(reportDir, filename);
 
-    const successCount = results.filter((r) => r.status === 'success').length;
-    sendEvent(sessionId, {
-      type: 'all_done',
-      total: bas.length,
-      success: successCount,
-      failed: bas.length - successCount,
-      downloadId: sessionId,
-      filename: filename,
-      savedPath: fullPath,
+      const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      fs.writeFileSync(fullPath, buffer);
+      sessionResults.set(sessionId, { buffer, filename, fullPath });
+
+      const successCount = results.filter((r) => r.status === 'success').length;
+      const failedCount = results.filter((r) => r.status !== 'success').length;
+
+      sendEvent(sessionId, {
+        type: 'all_done',
+        mode: 'individual',
+        total: baList.length,
+        totalBAs: baList.length,
+        success: successCount,
+        failed: failedCount,
+        downloadId: sessionId,
+        filename: filename,
+        savedPath: fullPath,
+      });
+    })().catch((err) => {
+      console.error(`[Fatal Run Error] Session ${sessionId}:`, err);
+      sendEvent(sessionId, {
+        type: 'run_fatal_error',
+        message: err.message || 'เกิดข้อผิดพลาดในการประมวลผล',
+      });
     });
-  })();
+  } else {
+    // ── MODE: 1 File = 1 Bill Order ─────────────────────────────────────────
+    (async () => {
+      sendEvent(sessionId, {
+        type: 'run_start',
+        mode: 'batch',
+        total: 1,
+        totalBAs: baList.length,
+        message: `เริ่มประมวลผล 1 บิล (${baList.length} BA)...`,
+      });
+
+      const batchResult = await runBatchBillingFlow(baList, config, sessionId);
+
+      // Build result Excel
+      const wb = xlsx.utils.book_new();
+      const wsData = [
+        ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
+      ];
+
+      for (const r of batchResult.items) {
+        wsData.push([
+          r.ba,
+          r.billingAccount,
+          r.billCycle,
+          r.billGroup,
+          r.cutOffDate,
+          r.processId,
+          r.billOrderNumber,
+          r.status === 'success' ? 'Success ✅' : 'Failed ❌',
+          r.error || '',
+        ]);
+      }
+
+      const ws = xlsx.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [
+        { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+        { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
+      ];
+      xlsx.utils.book_append_sheet(wb, ws, 'Results');
+
+      // Log sheet
+      const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
+      xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
+
+      const reportDir = path.join(__dirname, 'Data', 'Report');
+      if (!fs.existsSync(reportDir)) {
+        fs.mkdirSync(reportDir, { recursive: true });
+      }
+      const filename = `billing_results_${Date.now()}.xlsx`;
+      const fullPath = path.join(reportDir, filename);
+
+      const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      fs.writeFileSync(fullPath, buffer);
+      sessionResults.set(sessionId, { buffer, filename, fullPath });
+
+      const isSuccess = batchResult.status === 'success';
+      sendEvent(sessionId, {
+        type: 'all_done',
+        mode: 'batch',
+        total: 1,
+        totalBAs: baList.length,
+        success: isSuccess ? 1 : 0,
+        failed: isSuccess ? 0 : 1,
+        billOrderNumber: batchResult.billOrderNumber,
+        processId: batchResult.processId,
+        downloadId: sessionId,
+        filename: filename,
+        savedPath: fullPath,
+      });
+    })().catch((err) => {
+      console.error(`[Fatal Run Error] Session ${sessionId}:`, err);
+      sendEvent(sessionId, {
+        type: 'run_fatal_error',
+        message: err.message || 'เกิดข้อผิดพลาดในการประมวลผล',
+      });
+    });
+  }
 });
 
 // ─── Download result Excel & Save to Report Folder ────────────────────────────

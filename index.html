@@ -938,7 +938,7 @@
     </div>
 
     <!-- ── Run Buttons (Dual Mode) ── -->
-    <div class="run-btn-group">
+    <div class="run-btn-group" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
       <button id="run-batch-btn" class="btn-action btn-batch" disabled onclick="startRun('batch')">
         <span class="btn-icon">📦</span>
         <span class="btn-label">ออกบิลแบบรวม (1 ไฟล์ = 1 บิล)</span>
@@ -947,6 +947,10 @@
       <button id="run-single-btn" class="btn-action btn-individual" disabled onclick="startRun('individual')">
         <span class="btn-icon">⚡</span>
         <span class="btn-label">ออกบิลแบบแยก (1 BA = 1 บิล)</span>
+      </button>
+
+      <button id="abort-btn" onclick="abortRun()" style="display:none; padding:14px 22px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.5); border-radius:var(--radius); color:#fca5a5; font-family:'Prompt',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; align-items:center; gap:8px;">
+        <span>⏹️</span><span>ยกเลิก / หยุดรัน</span>
       </button>
     </div>
 
@@ -1215,6 +1219,7 @@
     function setButtonsRunning(activeMode, isSimulation) {
       const bBtn = document.getElementById('run-batch-btn');
       const sBtn = document.getElementById('run-single-btn');
+      const abBtn = document.getElementById('abort-btn');
       if (bBtn) {
         bBtn.disabled = true;
         if (activeMode === 'batch') {
@@ -1227,11 +1232,13 @@
           sBtn.innerHTML = `<span class="spin"></span><span>กำลังรันแยก${isSimulation ? ' (จำลอง)...' : '...'}</span>`;
         }
       }
+      if (abBtn) abBtn.style.display = 'inline-flex';
     }
 
     function resetRunButtons() {
       const bBtn = document.getElementById('run-batch-btn');
       const sBtn = document.getElementById('run-single-btn');
+      const abBtn = document.getElementById('abort-btn');
       const canEnable = baRows.length > 0;
       if (bBtn) {
         bBtn.disabled = !canEnable;
@@ -1241,11 +1248,48 @@
         sBtn.disabled = !canEnable;
         sBtn.innerHTML = `<span class="btn-icon">⚡</span><span class="btn-label">ออกบิลแบบแยก (1 BA = 1 บิล)</span>`;
       }
+      if (abBtn) abBtn.style.display = 'none';
+
       const badge = document.getElementById('status-badge');
-      if (badge && !badge.textContent.includes('สำเร็จ') && !badge.textContent.includes('ล้มเหลว')) {
+      if (badge && !badge.textContent.includes('สำเร็จ') && !badge.textContent.includes('ล้มเหลว') && !badge.textContent.includes('หยุด')) {
         badge.textContent = 'พร้อมใช้งาน';
         badge.style.color = 'var(--accent)';
       }
+    }
+
+    let watchdogTimer = null;
+    function resetWatchdog() {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = setTimeout(() => {
+        log('warn', '⚠️ ไม่มีการตอบกลับจากเซิร์ฟเวอร์เกิน 35 วินาที ระบบปลดล็อกปุ่มให้พร้อมทำงานต่อ');
+        resetRunButtons();
+      }, 35000);
+    }
+
+    function clearWatchdog() {
+      clearTimeout(watchdogTimer);
+    }
+
+    async function abortRun() {
+      if (!sessionId) return;
+      log('warn', '⏹️ กำลังส่งคำสั่งยกเลิกการรัน...');
+      try {
+        await fetch('/api/abort/' + sessionId, { method: 'POST' });
+      } catch (e) {
+        console.warn('Abort fetch error:', e.message);
+      }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      clearWatchdog();
+      resetRunButtons();
+      const badge = document.getElementById('status-badge');
+      if (badge) {
+        badge.textContent = 'หยุดการทำงานแล้ว';
+        badge.style.color = 'var(--danger)';
+      }
+      log('err', '⏹️ ยกเลิกการรันเรียบร้อยแล้ว');
     }
 
     // ═══════════════════════════════════════════════════════
@@ -1345,6 +1389,8 @@
 
       const config = { url02, environment: env, billMode, createBy: user, uuid, suffix, isSimulation };
 
+      resetWatchdog();
+
       // Open SSE
       if (eventSource) eventSource.close();
       eventSource = new EventSource(`/api/stream/${sessionId}`);
@@ -1362,10 +1408,12 @@
           if (!res.ok) {
             const err = await res.json();
             log('err', 'Server error: ' + err.error);
+            clearWatchdog();
             resetRunButtons();
           }
         } catch (err) {
           log('err', 'Cannot reach server: ' + err.message);
+          clearWatchdog();
           resetRunButtons();
         }
       };
@@ -1395,13 +1443,21 @@
     //  SSE Handler
     // ═══════════════════════════════════════════════════════
     function handleSSE(e) {
+      resetWatchdog();
       switch (e.type) {
         case 'connected':
           log('info', 'SSE connected — Session: ' + e.sessionId);
           break;
 
+        case 'run_aborted':
+          log('warn', '⏹️ ' + (e.message || 'ผู้ใช้สั่งหยุดการทำงาน'));
+          clearWatchdog();
+          resetRunButtons();
+          break;
+
         case 'run_fatal_error':
           log('err', '❌ ข้อผิดพลาดร้ายแรง: ' + e.message);
+          clearWatchdog();
           resetRunButtons();
           break;
 
@@ -1495,6 +1551,7 @@
           document.getElementById('status-badge').textContent = badgeText;
           document.getElementById('status-badge').style.color = e.success > 0 ? 'var(--accent3)' : 'var(--danger)';
 
+          clearWatchdog();
           resetRunButtons();
           log('ok', `เสร็จสิ้นกระบวนการ — สำเร็จ ${e.success}/${e.total} รายการ`);
 

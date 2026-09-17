@@ -17,6 +17,7 @@ app.use(express.static(path.join(__dirname)));
 const sseClients = new Map();     // sessionId → response stream
 const sessionResults = new Map(); // sessionId → Excel buffer
 const runLogs = new Map();        // sessionId → log entries[]
+const activeRuns = new Set();     // sessionId set of running jobs
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
@@ -338,6 +339,10 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
 
   // ── REAL MODE (1 BA = 1 บิล) ─────────────────────────────────────────────
   try {
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
     // ── STEP 1: checkBillingAccountNew
     sendEvent(sessionId, {
       type: 'step_start',
@@ -355,11 +360,13 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
         cutoff_date: '',
         confirm: true,
       },
-      { timeout: 60000 }
+      { timeout: 30000 }
     );
 
     const checkData = checkRes.data?.result?.[0];
-    if (!checkData) throw new Error(`[${ba}] checkBillingAccountNew: ไม่พบข้อมูล result จากเซิร์ฟเวอร์`);
+    if (!checkData || checkRes.data?.result === 'notFound Data') {
+      throw new Error(`[${ba}] ไม่พบข้อมูลในระบบ OPS สำหรับรอบบิลนี้ (notFound Data)`);
+    }
 
     result.billingAccount = checkData.billingAccount || ba;
     result.billCycle = checkData.billCycle;
@@ -382,6 +389,10 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
       },
     });
 
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
     // ── STEP 2: GentAcc
     const suffix = resolveSuffix(config.suffix, ba, index, total);
     const billOrderNumber = `${result.billCycle}${billGroupCode}${cutOff.YYYYMMDD}${suffix}`;
@@ -393,27 +404,53 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
       message: `[${ba}] สร้างใบแจ้งหนี้ (${billOrderNumber})...`,
     });
 
-    const gentAccRes = await axios.post(
+    const gentAccPayload = {
+      task_program: 'GentAcc',
+      bill_order_number: billOrderNumber,
+      bill_cycle: result.billCycle,
+      bill_group: billGroupCode,
+      cutoff_date: cutOff.DDMMYYYY,
+      hot_bil_rc: '0',
+      hot_bil_nrc: '0',
+      hot_bil_usage: '0',
+      create_by: creatorUuid,
+      confirm: false,
+      list_ba_file_data: [result.billingAccount],
+    };
+
+    let gentAccRes = await axios.post(
       `${baseUrl}/api/v1/invoicing/insertOPSInvoice`,
-      {
-        task_program: 'GentAcc',
-        bill_order_number: billOrderNumber,
-        bill_cycle: result.billCycle,
-        bill_group: billGroupCode,
-        cutoff_date: cutOff.DDMMYYYY,
-        hot_bil_rc: '0',
-        hot_bil_nrc: '0',
-        hot_bil_usage: '0',
-        create_by: creatorUuid,
-        confirm: false,
-        list_ba_file_data: [result.billingAccount],
-      },
-      { timeout: 90000 }
+      gentAccPayload,
+      { timeout: 30000 }
     );
+
+    // Auto-confirm if GentAcc Duplicate (same logic as OPS SIT web frontend)
+    if (
+      gentAccRes.data?.result?.status === 'warning' &&
+      gentAccRes.data?.result?.message === 'GentAcc Duplicate'
+    ) {
+      sendEvent(sessionId, {
+        type: 'step_start',
+        ba,
+        step: 'GentAcc',
+        message: `[${ba}] พบข้อมูล GentAcc Duplicate — ยืนยันออกบิลซ้ำอัตโนมัติ (confirm: true)...`,
+      });
+      gentAccPayload.confirm = true;
+      gentAccRes = await axios.post(
+        `${baseUrl}/api/v1/invoicing/insertOPSInvoice`,
+        gentAccPayload,
+        { timeout: 30000 }
+      );
+    }
+
+    if (gentAccRes.data?.result === 'notFound Data' || typeof gentAccRes.data?.result === 'string') {
+      throw new Error(`[${ba}] GentAcc: ${gentAccRes.data.result || 'ไม่พบข้อมูลในระบบ OPS (notFound Data)'}`);
+    }
 
     const processId = gentAccRes.data?.result?.processId;
     if (!processId) {
-      throw new Error(gentAccRes.data?.message || `[${ba}] GentAcc: ไม่พบ processId ใน response`);
+      const errMsg = gentAccRes.data?.result?.message || gentAccRes.data?.message || 'ไม่พบ processId ใน response';
+      throw new Error(`[${ba}] GentAcc: ${errMsg}`);
     }
 
     result.processId = processId;
@@ -428,15 +465,19 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
       data: { processId, billOrderNumber },
     });
 
-    // ── STEP 3: getBIP (Wait 5s)
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
+    // ── STEP 3: getBIP (Wait 1.5s instead of 5s)
     sendEvent(sessionId, {
       type: 'step_start',
       ba,
       step: 'getBIP',
-      message: `[${ba}] รอ 5 วินาที แล้วตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
+      message: `[${ba}] ตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
     });
 
-    await sleep(5000);
+    await sleep(1500);
 
     try {
       const bipRes = await axios.post(
@@ -446,7 +487,7 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
           pagination: { current: 1, pageSize: 25 },
           sorter: {},
         },
-        { timeout: 30000 }
+        { timeout: 15000 }
       );
 
       const items = bipRes.data?.result || [];
@@ -479,6 +520,10 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
       },
     });
 
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
     // ── STEP 4: GentProduction / Proforma
     const billMode = (config.billMode && config.billMode.trim())
       ? config.billMode.trim()
@@ -503,7 +548,7 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
         create_by: creatorUuid,
         cutoff_date: cutOff.DDMMYYYY,
       },
-      { timeout: 90000 }
+      { timeout: 30000 }
     );
 
     result.stepStatus.GentProduction = 'success';
@@ -692,6 +737,10 @@ async function runBatchBillingFlow(baList, config, sessionId) {
 
   // ── REAL MODE (1 ไฟล์ = 1 บิล) ─────────────────────────────────────────────
   try {
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
     // ── STEP 1: checkBillingAccountNew (All BAs in file)
     sendEvent(sessionId, {
       type: 'step_start',
@@ -708,11 +757,13 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         cutoff_date: '',
         confirm: true,
       },
-      { timeout: 60000 }
+      { timeout: 30000 }
     );
 
     const checkData = checkRes.data?.result?.[0];
-    if (!checkData) throw new Error('checkBillingAccountNew: ไม่พบข้อมูล result ในการตรวจสอบ BA');
+    if (!checkData || checkRes.data?.result === 'notFound Data') {
+      throw new Error('checkBillingAccountNew: ไม่พบข้อมูล BA ในระบบ OPS (notFound Data)');
+    }
 
     batchResult.billCycle = checkData.billCycle;
     const billGroupCode = extractBillGroupCode(checkData.billGroup);
@@ -733,6 +784,10 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       },
     });
 
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
     // ── STEP 2: GentAcc (1 Bill Order for ALL BAs)
     const suffix = resolveSuffix(config.suffix, baList[0], 1, 1);
     const billOrderNumber = `${batchResult.billCycle}${billGroupCode}${cutOff.YYYYMMDD}${suffix}`;
@@ -743,27 +798,52 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       message: `สร้างใบแจ้งหนี้ 1 บิล (${billOrderNumber}) สำหรับ ${count} BA...`,
     });
 
-    const gentAccRes = await axios.post(
+    const gentAccPayload = {
+      task_program: 'GentAcc',
+      bill_order_number: billOrderNumber,
+      bill_cycle: batchResult.billCycle,
+      bill_group: billGroupCode,
+      cutoff_date: cutOff.DDMMYYYY,
+      hot_bil_rc: '0',
+      hot_bil_nrc: '0',
+      hot_bil_usage: '0',
+      create_by: creatorUuid,
+      confirm: false,
+      list_ba_file_data: baList,
+    };
+
+    let gentAccRes = await axios.post(
       `${baseUrl}/api/v1/invoicing/insertOPSInvoice`,
-      {
-        task_program: 'GentAcc',
-        bill_order_number: billOrderNumber,
-        bill_cycle: batchResult.billCycle,
-        bill_group: billGroupCode,
-        cutoff_date: cutOff.DDMMYYYY,
-        hot_bil_rc: '0',
-        hot_bil_nrc: '0',
-        hot_bil_usage: '0',
-        create_by: creatorUuid,
-        confirm: false,
-        list_ba_file_data: baList,
-      },
-      { timeout: 90000 }
+      gentAccPayload,
+      { timeout: 30000 }
     );
+
+    // Auto-confirm if GentAcc Duplicate
+    if (
+      gentAccRes.data?.result?.status === 'warning' &&
+      gentAccRes.data?.result?.message === 'GentAcc Duplicate'
+    ) {
+      sendEvent(sessionId, {
+        type: 'step_start',
+        step: 'GentAcc',
+        message: `พบข้อมูล GentAcc Duplicate — ยืนยันออกบิลซ้ำอัตโนมัติ (confirm: true)...`,
+      });
+      gentAccPayload.confirm = true;
+      gentAccRes = await axios.post(
+        `${baseUrl}/api/v1/invoicing/insertOPSInvoice`,
+        gentAccPayload,
+        { timeout: 30000 }
+      );
+    }
+
+    if (gentAccRes.data?.result === 'notFound Data' || typeof gentAccRes.data?.result === 'string') {
+      throw new Error(gentAccRes.data.result || 'GentAcc: ไม่พบข้อมูลในระบบ OPS (notFound Data)');
+    }
 
     const processId = gentAccRes.data?.result?.processId;
     if (!processId) {
-      throw new Error(gentAccRes.data?.message || 'GentAcc: ไม่พบ processId ใน response');
+      const errMsg = gentAccRes.data?.result?.message || gentAccRes.data?.message || 'GentAcc: ไม่พบ processId ใน response';
+      throw new Error(errMsg);
     }
 
     batchResult.processId = processId;
@@ -777,14 +857,18 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       data: { processId, billOrderNumber, totalBAs: count },
     });
 
-    // ── STEP 3: getBIP (Wait 5s)
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
+    // ── STEP 3: getBIP (Wait 1.5s instead of 5s)
     sendEvent(sessionId, {
       type: 'step_start',
       step: 'getBIP',
-      message: `รอ 5 วินาที แล้วตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
+      message: `ตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
     });
 
-    await sleep(5000);
+    await sleep(1500);
 
     try {
       const bipRes = await axios.post(
@@ -794,7 +878,7 @@ async function runBatchBillingFlow(baList, config, sessionId) {
           pagination: { current: 1, pageSize: 25 },
           sorter: {},
         },
-        { timeout: 30000 }
+        { timeout: 15000 }
       );
 
       const items = bipRes.data?.result || [];
@@ -823,6 +907,10 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       },
     });
 
+    if (!activeRuns.has(sessionId)) {
+      throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+    }
+
     // ── STEP 4: GentProduction / Proforma
     const billMode = (config.billMode && config.billMode.trim())
       ? config.billMode.trim()
@@ -846,7 +934,7 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         create_by: creatorUuid,
         cutoff_date: cutOff.DDMMYYYY,
       },
-      { timeout: 90000 }
+      { timeout: 30000 }
     );
 
     batchResult.stepStatus.GentProduction = 'success';
@@ -917,6 +1005,17 @@ async function runBatchBillingFlow(baList, config, sessionId) {
 
 // ─── Run automation (Supports Batch and Individual modes) ─────────────────────
 
+app.post('/api/abort/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  const wasRunning = activeRuns.has(sessionId);
+  activeRuns.delete(sessionId);
+  sendEvent(sessionId, {
+    type: 'run_aborted',
+    message: 'ผู้ใช้สั่งหยุดการทำงาน (Aborted)',
+  });
+  res.json({ ok: true, wasRunning });
+});
+
 app.post('/api/run', async (req, res) => {
   const { sessionId, bas, config, mode = 'batch' } = req.body;
 
@@ -925,6 +1024,7 @@ app.post('/api/run', async (req, res) => {
   }
 
   const baList = bas.map(b => String(b.ba || b).trim()).filter(Boolean);
+  activeRuns.add(sessionId);
 
   // Respond immediately so client isn't waiting
   res.json({ started: true, count: baList.length, mode });
@@ -932,86 +1032,95 @@ app.post('/api/run', async (req, res) => {
   if (mode === 'individual') {
     // ── MODE: 1 BA = 1 Bill Order ───────────────────────────────────────────
     (async () => {
-      sendEvent(sessionId, {
-        type: 'run_start',
-        mode: 'individual',
-        total: baList.length,
-        totalBAs: baList.length,
-        message: `เริ่มประมวลผลแบบแยก (1 BA = 1 บิล) ทั้งหมด ${baList.length} รายการ...`,
-      });
-
-      const results = [];
-      let idx = 0;
-      for (const ba of baList) {
-        idx++;
+      try {
         sendEvent(sessionId, {
-          type: 'ba_start',
-          ba,
-          index: idx,
+          type: 'run_start',
+          mode: 'individual',
           total: baList.length,
+          totalBAs: baList.length,
+          message: `เริ่มประมวลผลแบบแยก (1 BA = 1 บิล) ทั้งหมด ${baList.length} รายการ...`,
         });
 
-        const r = await runIndividualBillingFlow(ba, config, sessionId, idx, baList.length);
-        results.push(r);
+        const results = [];
+        let idx = 0;
+        for (const ba of baList) {
+          if (!activeRuns.has(sessionId)) {
+            console.log(`[Run Aborted] Session ${sessionId} cancelled by user`);
+            break;
+          }
+          idx++;
+          sendEvent(sessionId, {
+            type: 'ba_start',
+            ba,
+            index: idx,
+            total: baList.length,
+          });
+
+          const r = await runIndividualBillingFlow(ba, config, sessionId, idx, baList.length);
+          results.push(r);
+        }
+
+        // Build result Excel
+        const wb = xlsx.utils.book_new();
+        const wsData = [
+          ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
+        ];
+
+        for (const r of results) {
+          wsData.push([
+            r.ba,
+            r.billingAccount,
+            r.billCycle,
+            r.billGroup,
+            r.cutOffDate,
+            r.processId,
+            r.billOrderNumber,
+            r.status === 'success' ? 'Success ✅' : 'Failed ❌',
+            r.error || '',
+          ]);
+        }
+
+        const ws = xlsx.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [
+          { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+          { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
+        ];
+        xlsx.utils.book_append_sheet(wb, ws, 'Results');
+
+        // Log sheet
+        const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
+        xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
+
+        const reportDir = path.join(__dirname, 'Data', 'Report');
+        if (!fs.existsSync(reportDir)) {
+          fs.mkdirSync(reportDir, { recursive: true });
+        }
+        const filename = `billing_results_individual_${Date.now()}.xlsx`;
+        const fullPath = path.join(reportDir, filename);
+
+        const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        fs.writeFileSync(fullPath, buffer);
+        sessionResults.set(sessionId, { buffer, filename, fullPath });
+
+        const successCount = results.filter((r) => r.status === 'success').length;
+        const failedCount = results.filter((r) => r.status !== 'success').length;
+
+        sendEvent(sessionId, {
+          type: 'all_done',
+          mode: 'individual',
+          total: baList.length,
+          totalBAs: baList.length,
+          success: successCount,
+          failed: failedCount,
+          downloadId: sessionId,
+          filename: filename,
+          savedPath: fullPath,
+        });
+      } finally {
+        activeRuns.delete(sessionId);
       }
-
-      // Build result Excel
-      const wb = xlsx.utils.book_new();
-      const wsData = [
-        ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
-      ];
-
-      for (const r of results) {
-        wsData.push([
-          r.ba,
-          r.billingAccount,
-          r.billCycle,
-          r.billGroup,
-          r.cutOffDate,
-          r.processId,
-          r.billOrderNumber,
-          r.status === 'success' ? 'Success ✅' : 'Failed ❌',
-          r.error || '',
-        ]);
-      }
-
-      const ws = xlsx.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [
-        { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
-        { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
-      ];
-      xlsx.utils.book_append_sheet(wb, ws, 'Results');
-
-      // Log sheet
-      const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
-      xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
-
-      const reportDir = path.join(__dirname, 'Data', 'Report');
-      if (!fs.existsSync(reportDir)) {
-        fs.mkdirSync(reportDir, { recursive: true });
-      }
-      const filename = `billing_results_individual_${Date.now()}.xlsx`;
-      const fullPath = path.join(reportDir, filename);
-
-      const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      fs.writeFileSync(fullPath, buffer);
-      sessionResults.set(sessionId, { buffer, filename, fullPath });
-
-      const successCount = results.filter((r) => r.status === 'success').length;
-      const failedCount = results.filter((r) => r.status !== 'success').length;
-
-      sendEvent(sessionId, {
-        type: 'all_done',
-        mode: 'individual',
-        total: baList.length,
-        totalBAs: baList.length,
-        success: successCount,
-        failed: failedCount,
-        downloadId: sessionId,
-        filename: filename,
-        savedPath: fullPath,
-      });
     })().catch((err) => {
+      activeRuns.delete(sessionId);
       console.error(`[Fatal Run Error] Session ${sessionId}:`, err);
       sendEvent(sessionId, {
         type: 'run_fatal_error',
@@ -1021,73 +1130,78 @@ app.post('/api/run', async (req, res) => {
   } else {
     // ── MODE: 1 File = 1 Bill Order ─────────────────────────────────────────
     (async () => {
-      sendEvent(sessionId, {
-        type: 'run_start',
-        mode: 'batch',
-        total: 1,
-        totalBAs: baList.length,
-        message: `เริ่มประมวลผล 1 บิล (${baList.length} BA)...`,
-      });
+      try {
+        sendEvent(sessionId, {
+          type: 'run_start',
+          mode: 'batch',
+          total: 1,
+          totalBAs: baList.length,
+          message: `เริ่มประมวลผล 1 บิล (${baList.length} BA)...`,
+        });
 
-      const batchResult = await runBatchBillingFlow(baList, config, sessionId);
+        const batchResult = await runBatchBillingFlow(baList, config, sessionId);
 
-      // Build result Excel
-      const wb = xlsx.utils.book_new();
-      const wsData = [
-        ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
-      ];
+        // Build result Excel
+        const wb = xlsx.utils.book_new();
+        const wsData = [
+          ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
+        ];
 
-      for (const r of batchResult.items) {
-        wsData.push([
-          r.ba,
-          r.billingAccount,
-          r.billCycle,
-          r.billGroup,
-          r.cutOffDate,
-          r.processId,
-          r.billOrderNumber,
-          r.status === 'success' ? 'Success ✅' : 'Failed ❌',
-          r.error || '',
-        ]);
+        for (const r of batchResult.items) {
+          wsData.push([
+            r.ba,
+            r.billingAccount,
+            r.billCycle,
+            r.billGroup,
+            r.cutOffDate,
+            r.processId,
+            r.billOrderNumber,
+            r.status === 'success' ? 'Success ✅' : 'Failed ❌',
+            r.error || '',
+          ]);
+        }
+
+        const ws = xlsx.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [
+          { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+          { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
+        ];
+        xlsx.utils.book_append_sheet(wb, ws, 'Results');
+
+        // Log sheet
+        const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
+        xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
+
+        const reportDir = path.join(__dirname, 'Data', 'Report');
+        if (!fs.existsSync(reportDir)) {
+          fs.mkdirSync(reportDir, { recursive: true });
+        }
+        const filename = `billing_results_${Date.now()}.xlsx`;
+        const fullPath = path.join(reportDir, filename);
+
+        const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        fs.writeFileSync(fullPath, buffer);
+        sessionResults.set(sessionId, { buffer, filename, fullPath });
+
+        const isSuccess = batchResult.status === 'success';
+        sendEvent(sessionId, {
+          type: 'all_done',
+          mode: 'batch',
+          total: 1,
+          totalBAs: baList.length,
+          success: isSuccess ? 1 : 0,
+          failed: isSuccess ? 0 : 1,
+          billOrderNumber: batchResult.billOrderNumber,
+          processId: batchResult.processId,
+          downloadId: sessionId,
+          filename: filename,
+          savedPath: fullPath,
+        });
+      } finally {
+        activeRuns.delete(sessionId);
       }
-
-      const ws = xlsx.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [
-        { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
-        { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
-      ];
-      xlsx.utils.book_append_sheet(wb, ws, 'Results');
-
-      // Log sheet
-      const logsSheet = xlsx.utils.json_to_sheet(runLogs.get(sessionId) || []);
-      xlsx.utils.book_append_sheet(wb, logsSheet, 'Logs');
-
-      const reportDir = path.join(__dirname, 'Data', 'Report');
-      if (!fs.existsSync(reportDir)) {
-        fs.mkdirSync(reportDir, { recursive: true });
-      }
-      const filename = `billing_results_${Date.now()}.xlsx`;
-      const fullPath = path.join(reportDir, filename);
-
-      const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      fs.writeFileSync(fullPath, buffer);
-      sessionResults.set(sessionId, { buffer, filename, fullPath });
-
-      const isSuccess = batchResult.status === 'success';
-      sendEvent(sessionId, {
-        type: 'all_done',
-        mode: 'batch',
-        total: 1,
-        totalBAs: baList.length,
-        success: isSuccess ? 1 : 0,
-        failed: isSuccess ? 0 : 1,
-        billOrderNumber: batchResult.billOrderNumber,
-        processId: batchResult.processId,
-        downloadId: sessionId,
-        filename: filename,
-        savedPath: fullPath,
-      });
     })().catch((err) => {
+      activeRuns.delete(sessionId);
       console.error(`[Fatal Run Error] Session ${sessionId}:`, err);
       sendEvent(sessionId, {
         type: 'run_fatal_error',

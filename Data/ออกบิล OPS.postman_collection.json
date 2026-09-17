@@ -1,0 +1,806 @@
+{
+  "info": {
+    "_postman_id": "1913d0a0-61f3-4099-81a9-1ce170d6cbfc",
+    "name": "ออกบิล OPS",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "29263127"
+  },
+  "item": [
+    {
+      "name": "CreateBA",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "\r",
+              "var jsonData = pm.response.json();\r",
+              "pm.environment.set(\"BA\",jsonData.NTH_FLD_BILLING_ACCOUNT_NO);\r",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "function generateThaiID() {\r",
+              "    let digits = [];\r",
+              "    \r",
+              "    // เลขตัวแรก (1-8) โดยทั่วไปใช้ 1, 2, 3, 5 หรือ 6\r",
+              "    digits.push(Math.floor(Math.random() * 6) + 1);\r",
+              "    \r",
+              "    // สุ่มเลข 11 หลักถัดไป\r",
+              "    for (let i = 0; i < 11; i++) {\r",
+              "        digits.push(Math.floor(Math.random() * 10));\r",
+              "    }\r",
+              "\r",
+              "    // คำนวณเลขตรวจสอบหลักสุดท้าย (Check digit)\r",
+              "    let sum = 0;\r",
+              "    for (let i = 0; i < 12; i++) {\r",
+              "        sum += digits[i] * (13 - i);\r",
+              "    }\r",
+              "    \r",
+              "    let checkDigit = (11 - (sum % 11)) % 10;\r",
+              "    digits.push(checkDigit);\r",
+              "\r",
+              "    return digits.join('');\r",
+              "}\r",
+              "\r",
+              "// สร้างเลขบัตรประชาชนแบบสุ่ม\r",
+              "let thaiID = generateThaiID();\r",
+              "\r",
+              "// เก็บค่าไว้ใช้ใน request\r",
+              "pm.environment.set(\"thai_id\", thaiID);\r",
+              "\r",
+              "// แสดงผลใน Console ของ Postman\r",
+              "console.log(\"Generated Thai ID:\", thaiID);\r",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"ACCTINFO\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"NTH_FLD_BILLING_ACCOUNT_NO\": \"2205690955\", // เปลี่ยน\r\n            \"CURRENCY\": \"764\",\r\n            \"BAL_INFO\": [\r\n                {\r\n                    \"elem\": \"0\"\r\n                }\r\n            ], \r\n            \"BUSINESS_TYPE\": \"1\",\r\n            \"POID\": \"0.0.0.1 /account -1 0\"\r\n        }\r\n    ],\r\n    \"BILLINFO\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"BAL_INFO\": [\r\n                {\r\n                    \"elem\": \"0\"\r\n                }\r\n            ],\r\n            \"BILLINFO_ID\": \"1689331810\",\r\n            \"PAY_TYPE\": \"10001\",\r\n            \"POID\": \"0.0.0.1 /billinfo -1 0\",\r\n            \"ACTG_CYCLE_DOM\": 1\r\n        }\r\n    ],\r\n    \"CONTEXT_INFO\": {\r\n        \"CORRELATION_ID\": \"2546387808082\",\r\n        \"EXTERNAL_USER\": \"NT-THAI-BRM\"\r\n    },\r\n    \"FLAGS\": \"0\",\r\n    \"LOCALES\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"LOCALE\": \"en_US\"\r\n        }\r\n    ],\r\n    \"ORDERS\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"ORDER_ID\": \"0884112284\", // เปลี่ยน BA\r\n            \"ORDER_TYPE\": \"CBA\",\r\n            \"EFFECTIVE_T\" : \"2026-01-01T07:00:00Z\"\r\n        }\r\n    ],\r\n    \"PAYINFO\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"INHERITED_INFO\": {\r\n                \"INV_INFO\": [\r\n                    {\r\n                        \"elem\": \"0\",\r\n                        \"ADDRESS\": \"cds\",\r\n                        \"CITY\": \"Tiwanon\",\r\n                        \"COUNTRY\": \"TH\",\r\n                        \"DELIVERY_DESCR\": \"VAT\",\r\n                        \"DELIVERY_PREFER\": \"0\",\r\n                        \"EMAIL_ADDR\": \"dk@gmail\",\r\n                        \"INV_TERMS\": \"0\",\r\n                        \"NAME\": \" deekshi\",\r\n                        \"STATE\": \"k \",\r\n                        \"ZIP\": \"37845\"\r\n                    }\r\n                ]\r\n            },\r\n            \"INV_TYPE\": \"257\",\r\n            \"NAME\": \"Cash\",\r\n            \"PAY_TYPE\": \"10001\",\r\n            \"POID\": \"0.0.0.1 /payinfo/invoice -1 0\"\r\n        }\r\n    ],\r\n    \"POID\": \"0.0.0.1 /plan -1 0\",\r\n    \"PROFILES\": [\r\n        {\r\n            \"elem\": \"1\",\r\n            \"INHERITED_INFO\": {\r\n                \"NTH_FLD_CUSTOMER_DETAILS\": [\r\n                    {\r\n                        \"elem\": \"0\",\r\n                        \"NTH_FLD_ADDRESSES\": [\r\n                            {\r\n                                \"elem\": \"1\",\r\n                                \"NTH_FLD_ADDRESS_TYPE\": \"1\",\r\n                                \"NTH_FLD_BUILDING\": \"covalense\",\r\n                                \"NTH_FLD_HOUSE_NO\": \"No.40\",\r\n                                \"NTH_FLD_LATITUDE\": \"{{$randomLatitude}}\",\r\n                                \"NTH_FLD_LONGITUDE\": \"{{$randomLongitude}}\",\r\n                                \"NTH_FLD_MOO\": \"1\",\r\n                                \"NTH_FLD_TROK\": \"1\",\r\n                                \"NTH_FLD_VILLAGE\": \"1\",\r\n                                \"NTH_FLD_ROAD\": \"{{$randomStreetName}}\",\r\n                                \"CITY\": \"{{$randomCity}}\",\r\n                                \"COMPANY\": \"{{$randomCompanyName}}\",\r\n                                \"COUNTRY\": \"764\",\r\n                                \"COUNTY\": \"{{$randomStreetName}}\",\r\n                                \"FIRST_NAME\": \"{{$randomFirstName}}\",\r\n                                \"LAST_NAME\": \"{{$randomLastName}}\",\r\n                                \"MIDDLE_NAME\": \"Wesker\",\r\n                                \"PHONE\": \"{{$randomPhoneNumber}}\",\r\n                                \"STATE\": \"Bangalore\",\r\n                                \"ZIP\": \"{{$randomCreditCardMask}}\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"2\",\r\n                                 \"NTH_FLD_ADDRESS_TYPE\": \"2\",\r\n                                \"NTH_FLD_BUILDING\": \"covalense\",\r\n                                \"NTH_FLD_HOUSE_NO\": \"No.40\",\r\n                                \"NTH_FLD_LATITUDE\": \"{{$randomLatitude}}\",\r\n                                \"NTH_FLD_LONGITUDE\": \"{{$randomLongitude}}\",\r\n                                \"NTH_FLD_MOO\": \"2\",\r\n                                \"NTH_FLD_TROK\": \"2\",\r\n                                \"NTH_FLD_VILLAGE\": \"2\",\r\n                                \"NTH_FLD_ROAD\": \"{{$randomStreetName}}\",\r\n                                \"CITY\": \"{{$randomCity}}\",\r\n                                \"COMPANY\": \"{{$randomCompanyName}}\",\r\n                                \"COUNTRY\": \"764\",\r\n                                \"COUNTY\": \"{{$randomStreetName}}\",\r\n                                \"FIRST_NAME\": \"{{$randomFirstName}}\",\r\n                                \"LAST_NAME\": \"{{$randomLastName}}\",\r\n                                \"MIDDLE_NAME\": \"Wesker\",\r\n                                \"PHONE\": \"{{$randomPhoneNumber}}\",\r\n                                \"STATE\": \"Bangalore\",\r\n                                \"ZIP\": \"{{$randomCreditCardMask}}\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"3\",\r\n                                \"NTH_FLD_ADDRESS_TYPE\": \"3\",\r\n                                \"NTH_FLD_BUILDING\": \"covalense\",\r\n                                \"NTH_FLD_HOUSE_NO\": \"No.40\",\r\n                                \"NTH_FLD_LATITUDE\": \"{{$randomLatitude}}\",\r\n                                \"NTH_FLD_LONGITUDE\": \"{{$randomLongitude}}\",\r\n                                \"NTH_FLD_MOO\": \"3\",\r\n                                \"NTH_FLD_TROK\": \"3\",\r\n                                \"NTH_FLD_VILLAGE\": \"3\",\r\n                                \"NTH_FLD_ROAD\": \"{{$randomStreetName}}\",\r\n                                \"CITY\": \"{{$randomCity}}\",\r\n                                \"COMPANY\": \"{{$randomCompanyName}}\",\r\n                                \"COUNTRY\": \"764\",\r\n                                \"COUNTY\": \"{{$randomStreetName}}\",\r\n                                \"FIRST_NAME\": \"{{$randomFirstName}}\",\r\n                                \"LAST_NAME\": \"{{$randomLastName}}\",\r\n                                \"MIDDLE_NAME\": \"Wesker\",\r\n                                \"PHONE\": \"{{$randomPhoneNumber}}\",\r\n                                \"STATE\": \"Bangalore\",\r\n                                \"ZIP\": \"{{$randomCreditCardMask}}\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"4\",\r\n                                 \"NTH_FLD_ADDRESS_TYPE\": \"4\",\r\n                                \"NTH_FLD_BUILDING\": \"covalense\",\r\n                                \"NTH_FLD_HOUSE_NO\": \"No.40\",\r\n                                \"NTH_FLD_LATITUDE\": \"{{$randomLatitude}}\",\r\n                                \"NTH_FLD_LONGITUDE\": \"{{$randomLongitude}}\",\r\n                                \"NTH_FLD_MOO\":\"4\",\r\n                                \"NTH_FLD_TROK\":\"4\",\r\n                                \"NTH_FLD_VILLAGE\":\"4\",\r\n                                \"NTH_FLD_ROAD\": \"{{$randomStreetName}}\",\r\n                                \"CITY\": \"{{$randomCity}}\",\r\n                                \"COMPANY\": \"{{$randomCompanyName}}\",\r\n                                \"COUNTRY\": \"764\",\r\n                                \"COUNTY\": \"{{$randomStreetName}}\",\r\n                                \"FIRST_NAME\": \"{{$randomFirstName}}\",\r\n                                \"LAST_NAME\": \"{{$randomLastName}}\",\r\n                                \"MIDDLE_NAME\": \"Wesker\",\r\n                                \"PHONE\": \"{{$randomPhoneNumber}}\",\r\n                                \"STATE\": \"Bangalore\",\r\n                                \"ZIP\": \"{{$randomCreditCardMask}}\"\r\n                            }\r\n                        ],\r\n                        \"NTH_FLD_BILLING_GROUP\": \"20000\", //3\r\n                        \"NTH_FLD_BILL_COUNTY\": \"แขวงห้วยขวาง\",\r\n                        \"NTH_FLD_BILL_DISP_METHOD\": \"1\",\r\n                        \"NTH_FLD_BILL_FMT_OPT\": \"1\",\r\n                        \"NTH_FLD_BILL_PERIOD\": \"06A\", //4\r\n                        \"NTH_FLD_CONTACT_ADDRESS\": [\r\n                            {\r\n                                \"elem\": \"1\",\r\n                                \"NTH_FLD_ADDRESS_TYPE\": \"1\",\r\n                                \"EMAIL_ADDR\": \"gojo.saturo@gmail_com\",\r\n                                \"FAX_PHONE\": \"99900999000\",\r\n                                \"FIRST_NAME\": \"Gojo\",\r\n                                \"HOME_PHONE\": \"99900999000\",\r\n                                \"LAST_NAME\": \"Saturo\",\r\n                                \"MIDDLE_NAME\": \"S\",\r\n                                \"PHONE\": \"99900999000\",\r\n                                \"TITLE\": \"Mr.\"\r\n                            }\r\n                        ],\r\n                        \"NTH_FLD_CUSTOMER_GROUP\": \"3435454\",\r\n                        \"NTH_FLD_CUSTOMER_SERVICE_CENTERS\": [\r\n                            {\r\n                                \"elem\": \"1\",\r\n                                \"NTH_FLD_SERVICE_CENTER_ADDR\": \"bengluru\",\r\n                                \"NTH_FLD_SERVICE_CENTER_ID\": \"3000\",\r\n                                \"NTH_FLD_SERVICE_CENTER_NAME\": \"cds\",\r\n                                \"NTH_FLD_SERVICE_CENTER_TYPE\": \"1\"\r\n                            }\r\n                        ],\r\n                        \"NTH_FLD_EMPLOYEE_ID\": \"11\",\r\n                        \"NTH_FLD_EXTERNAL_ID\": \"3424233232323232\",\r\n                        \"NTH_FLD_EXTERNAL_ID_TYPE\": \"223\",\r\n                        \"NTH_FLD_EXT_DATA\": [\r\n                            {\r\n                                \"elem\": \"20010\",\r\n                                \"PARAM_NAME\": \"DTitle\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20011\",\r\n                                \"PARAM_NAME\": \"DFirstName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20012\",\r\n                                \"PARAM_NAME\": \"DLastName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20013\",\r\n                                \"PARAM_NAME\": \"DCompanyName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20014\",\r\n                                \"PARAM_NAME\": \"DAddress1\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20015\",\r\n                                \"PARAM_NAME\": \"DAddress2\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20016\",\r\n                                \"PARAM_NAME\": \"DAddress3\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20021\",\r\n                                \"PARAM_NAME\": \"DCountry\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20022\",\r\n                                \"PARAM_NAME\": \"VatDisplay\",\r\n                                \"PARAM_VALUE\": \"1\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20017\",\r\n                                \"PARAM_NAME\": \"DCounty\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20002\",\r\n                                \"PARAM_NAME\": \"Attention\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20007\",\r\n                                \"PARAM_NAME\": \"account code\",\r\n                                \"PARAM_VALUE\": \"1\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20008\",\r\n                                \"PARAM_NAME\": \"InvoiceType\",\r\n                                \"PARAM_VALUE\": \"1\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20018\",\r\n                                \"PARAM_NAME\": \"DCity\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20019\",\r\n                                \"PARAM_NAME\": \"DState\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20020\",\r\n                                \"PARAM_NAME\": \"DZipCode\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20023\",\r\n                                \"PARAM_NAME\": \"GsoNo\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20024\",\r\n                                \"PARAM_NAME\": \"PoNo\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20025\",\r\n                                \"PARAM_NAME\": \"BillRemark\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20027\",\r\n                                \"PARAM_NAME\": \"CarrierType\",\r\n                                \"PARAM_VALUE\": \"1\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20030\",\r\n                                \"PARAM_NAME\": \"StatementParent\",\r\n                                \"PARAM_VALUE\": \"1\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20032\",\r\n                                \"PARAM_NAME\": \"BillDisplay\",\r\n                                \"PARAM_VALUE\": \"1\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20033\",\r\n                                \"PARAM_NAME\": \"DeliVatThaiTitleLkp\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20034\",\r\n                                \"PARAM_NAME\": \"DeliVatFirstName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20035\",\r\n                                \"PARAM_NAME\": \"DeliVatLastName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20037\",\r\n                                \"PARAM_NAME\": \"DeliVatCompName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20038\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrLine1\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20039\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrLine2\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20040\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrLine3\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20041\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrLine4\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20042\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrKhetAmphur\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20043\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrProvinceLkp\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20044\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrPostCode\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20045\",\r\n                                \"PARAM_NAME\": \"DeliVatAddrCountryLkp\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20048\",\r\n                                \"PARAM_NAME\": \"branch_id\",\r\n                                \"PARAM_VALUE\": \"00000\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20060\",\r\n                                \"PARAM_NAME\": \"InternalSalesRef\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20061\",\r\n                                \"PARAM_NAME\": \"SalesName\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20062\",\r\n                                \"PARAM_NAME\": \"SalesTerritory\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20063\",\r\n                                \"PARAM_NAME\": \"eGP_Contact\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20064\",\r\n                                \"PARAM_NAME\": \"eGP_StartDate\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20065\",\r\n                                \"PARAM_NAME\": \"eGP_EndDate\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20066\",\r\n                                \"PARAM_NAME\": \"eGP_Value\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20067\",\r\n                                \"PARAM_NAME\": \"PPM_NUMBER\",\r\n                                \"PARAM_VALUE\": \" \"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20068\",\r\n                                \"PARAM_NAME\": \"ACCUMULATED_CHARGE\",\r\n                                \"PARAM_VALUE\": \"0\"\r\n                            },\r\n                            {\r\n                                \"elem\": \"20069\",\r\n                                \"PARAM_NAME\": \"Bill Period SVC ACT_DT\",\r\n                                \"PARAM_VALUE\": \"0\"\r\n                            }\r\n                        ],\r\n                        \"NTH_FLD_FRANCHISE_TAX_CODE\": \"1\",\r\n                        \"NTH_FLD_LANG_CODE\": \"22\",\r\n                        \"NTH_FLD_NATIONALITY\": \"TH\",\r\n                        \"NTH_FLD_NO_BILL\": \"0\",\r\n                        \"NTH_FLD_PREFERRED_LANG\": \"22\",\r\n                        \"NTH_FLD_RATE_CLASS\": \"2\",\r\n                        \"NTH_FLD_REGISTER_TYPE\": \" \",\r\n                        \"NTH_FLD_REGISTRATION_FORM\": \"3432\",\r\n                        \"NTH_FLD_SALES_CENTER_ID\": \"1000\",\r\n                        \"NTH_FLD_SALES_CODE\": \"ccrhcr07\",\r\n                        \"NTH_FLD_SSN_ID\": \"{{thai_id}}\",\r\n                        \"NTH_FLD_VAT_COUNTY\": \"แขวงห้วยขวาง\",  \r\n                        \"NTH_FLD_VAT_DISP_METHOD\": \"1\",\r\n                        \"NTH_FLD_VIP_CODE\": \"0\",\r\n                        \"CREDIT_THRESHOLDS\": \"5000\",\r\n                        \"CUSTOMER_SEGMENT\": \"2\",\r\n                        \"CUSTOMER_TYPE\": \"1\",\r\n                        \"EMAIL_ADDR\": \"Support@truecorp.co.th\"\r\n                    }\r\n                ]\r\n            },\r\n            \"PROFILE_OBJ\": \"0.0.0.1 /profile/nth_customer_details -1 0\"\r\n        }\r\n    ],\r\n    \"TXN_FLAGS\": \"2\"\r\n    // \"START_T\": \"2024-03-20T07:22:03Z\" \r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://{{URL}}/brm-api/v1/account/createBillingAccount",
+          "protocol": "http",
+          "host": [
+            "{{URL}}"
+          ],
+          "path": [
+            "brm-api",
+            "v1",
+            "account",
+            "createBillingAccount"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create_Oeder",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "// createService\r\n{\r\n    // \"NTH_FLD_ACCOUNT_POID_ID\": \"502482180\", // unique  // O\r\n    \"NTH_FLD_BILLING_ACCOUNT_NO\": \"{{BA}}\", // unique//เปลี่ยนทุกครั้ง\r\n    \"NTH_FLD_SERVICE_DETAILS\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"NTH_FLD_CONTACT_ADDRESS\": [\r\n                {\r\n                    \"elem\": \"2\",\r\n                    \"NTH_FLD_ADDRESS_TYPE\": \"2\", //M\r\n                    \"EMAIL_ADDR\": \"{{$randomEmail}}\",\r\n                    \"FAX_PHONE\": \"{{$randomPhoneNumber}}\",\r\n                    \"FIRST_NAME\": \"{{$randomPhoneNumber}}\",\r\n                    \"HOME_PHONE\": \"1212312121\",\r\n                    \"LAST_NAME\": \"{{$randomLastName}}\",\r\n                    \"MIDDLE_NAME\": \"{{$randomFirstName}}\",\r\n                    \"PHONE\": \"123123\",\r\n                    \"TITLE\": \"{{$randomNameSuffix}}\"\r\n                },\r\n                {\r\n                    \"elem\": \"1\",\r\n                    \"NTH_FLD_ADDRESS_TYPE\": \"1\", //M\r\n                    \"EMAIL_ADDR\": \"{{$randomEmail}}\",\r\n                    \"FAX_PHONE\": \"{{$randomEmail}}\",\r\n                    \"FIRST_NAME\": \"{{$randomPhoneNumber}}\",\r\n                    \"HOME_PHONE\": \"1212312121\",\r\n                    \"LAST_NAME\": \"{{$randomLastName}}\",\r\n                    \"MIDDLE_NAME\": \"{{$randomFirstName}}\",\r\n                    \"PHONE\": \"123123\",\r\n                    \"TITLE\": \"{{$randomNameSuffix}}\"\r\n                }\r\n            ],\r\n            \"NTH_FLD_EXT_DATA\": [\r\n                {\r\n                    \"elem\": \"10011\",\r\n                    \"NTH_FLD_PARAM_ID\": \"10011\", // M \r\n                    \"PARAM_NAME\": \"ContractStartDT\",\r\n                    \"PARAM_VALUE\": \"01/08/2019\" // M\r\n                },\r\n                {\r\n                    \"elem\": \"10025\",\r\n                    \"NTH_FLD_PARAM_ID\": \"10025\", // M\r\n                    \"PARAM_NAME\": \"operator name\",\r\n                    \"PARAM_VALUE\": \"AWN\" // M\r\n                }\r\n            ],\r\n            // \"NTH_FLD_INSTALLATION_ADDRESS\": [\r\n            //     {\r\n            //         \"elem\": \"2\",\r\n            //         \"NTH_FLD_ADDRESS_TYPE\": \"2\",         // M\r\n            //         \"NTH_FLD_BUILDING\": \"mayfair\",\r\n            //         \"NTH_FLD_HOUSE_NO\": \"605\",\r\n            //         \"NTH_FLD_LATITUDE\": \"10.10.10.11\",\r\n            //         \"NTH_FLD_LONGITUDE\": \"10.10.10.10\",\r\n            //         \"NTH_FLD_MOO\": \"abcd\",\r\n            //         \"NTH_FLD_ROAD\": \"\",\r\n            //         \"NTH_FLD_TROK\": \"efg\",\r\n            //         \"NTH_FLD_VILLAGE\": \"xyz\",\r\n            //         \"CITY\": \"Bangalore\",\r\n            //         \"COMPANY\": \"Cds\",\r\n            //         \"COUNTRY\": \"Japan\",\r\n            //         \"COUNTY\": \"\",\r\n            //         \"FIRST_NAME\": \"Gojo\",\r\n            //         \"LAST_NAME\": \"\",\r\n            //         \"MIDDLE_NAME\": \"S\",\r\n            //         \"PHONE\": \"9995600021\",\r\n            //         \"STATE\": \"\",\r\n            //         \"ZIP\": \"5600021\"\r\n            //     },\r\n            //     {\r\n            //         \"elem\": \"1\",\r\n            //         \"NTH_FLD_ADDRESS_TYPE\": \"1\",\r\n            //         \"NTH_FLD_BUILDING\": \"\",\r\n            //         \"NTH_FLD_HOUSE_NO\": \"\",\r\n            //         \"NTH_FLD_LATITUDE\": \"\",\r\n            //         \"NTH_FLD_LONGITUDE\": \"\",\r\n            //         \"NTH_FLD_MOO\": \"abcd\",\r\n            //         \"NTH_FLD_ROAD\": \"\",\r\n            //         \"NTH_FLD_TROK\": \"efg\",\r\n            //         \"NTH_FLD_VILLAGE\": \"xyz\",\r\n            //         \"CITY\": \"Bangalore\",\r\n            //         \"COMPANY\": \"Cds\",\r\n            //         \"COUNTRY\": \"Japan\",\r\n            //         \"COUNTY\": \"\",\r\n            //         \"FIRST_NAME\": \"Gojo\",\r\n            //         \"LAST_NAME\": \"\",\r\n            //         \"MIDDLE_NAME\": \"S\",\r\n            //         \"PHONE\": \"9995600021\",\r\n            //         \"STATE\": \"\",\r\n            //         \"ZIP\": \"5600021\"\r\n            //     }\r\n            // ],\r\n            \"NTH_FLD_SERVICE_GROUP\": \"corporate internet\"\r\n        }\r\n        // ],\r\n        // \"BUNDLE_INFO\": [\r\n        //     {\r\n        //         \"elem\": \"0\",\r\n        //         \"NTH_FLD_BUNDLE_TYPE\": \"6\", // M\r\n        //         \"PRODUCTS\": [\r\n        //             {\r\n        //                 \"elem\": \"0\",\r\n        //                 // \"NTH_FLD_DISCOUNT_POID_ID\": \"69564858\",\r\n        //                 // \"NTH_FLD_UNIT_TYPE\": \"กิโลเมตร\",\r\n        //                 \"DESCR\": \"\",\r\n        //                 \"NAME\": \"820210005\",\r\n        //                 \"QUANTITY\": \"1\" // M\r\n        //             }\r\n        //         ]\r\n        //     }\r\n    ],\r\n    \"CONTEXT_INFO\": {\r\n        \"CORRELATION_ID\": \"321269766374375\", // M\r\n        \"EXTERNAL_USER\": \"NT-THAI-BRM\" // M\r\n    },\r\n    \"ORDERS\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"EFFECTIVE_T\": \"2026-01-01T08:22:03Z\",\r\n            \"ORDER_ID\": \"1741551169\",//เปลี่ยนก็ได้ไม่เปลี่ยนก็ได้ (เลขอะไรก็ได้)\r\n            \"ORDER_TYPE\": \"CNO\" // M\r\n        }\r\n    ],\r\n    \"PACKAGE_INFO\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"NTH_FLD_PACKAGE_TYPE\": \"Base\", // M\r\n            \"BUNDLE_INFO\": [\r\n                {\r\n                    \"elem\": \"1\",\r\n                    \"Name\": \"308234001\",   //Product//เลขรหัสจากรหัส PK (7)\r\n                    \"NTH_FLD_BUNDLE_TYPE\": \"7\", // Mในเคสระบุว่าเป็น PK ประเภท\r\n                    \"PRODUCTS\": [ //discount(ถ้าซื้อdiscountใส่ตัวมันเอง ส่วนอันอื่นให้ใช้ product)\r\n                        {\r\n                            \"elem\": \"0\",\r\n                            \"NTH_FLD_OVERRIDE_RUM\": 1,\r\n                            //\"NTH_FLD_UNIT_TYPE\" : \"Kbps\", //เปลี่ยนตามตัวแพ็กเกต\r\n                            // \"NTH_FLD_OVERRIDE_AMOUNT\": 1000, //การเปลี่ยนยอดเงิน \r\n                            \"DESCR\": \"\",//ใส่หรือไม่ใส่ก็ได้ ถ้าไม่ใส่จะดึกข้อมูลใน data เดิมมาแสดง\r\n                            \"NAME\": \"308234001\",  //Product\r\n                            \"QUANTITY\": \"1\"\r\n                        }\r\n                    ]\r\n                }\r\n                // {\r\n                //     \"elem\": \"2\",\r\n                //     \"Name\": \"110002001\",\r\n                //     \"NTH_FLD_BUNDLE_TYPE\": \"5\", //unit free\r\n                //     \"PRODUCTS\": [\r\n                //         {\r\n                //             \"elem\": \"0\",\r\n                //             \"NTH_FLD_OVERRIDE_RUM\": 1,\r\n                //             // \"NTH_FLD_OVERRIDE_AMOUNT\": 5000,\r\n                //             \"DESCR\": \"\",\r\n                //             \"NAME\": \"110002001\",\r\n                //             \"QUANTITY\": \"1\"\r\n                //         }\r\n                //     ]\r\n                // }\r\n                // {\r\n                //     \"elem\": \"3\",\r\n                //     \"Name\": \"110217001\",\r\n                //     \"NTH_FLD_BUNDLE_TYPE\": \"5\",\r\n                //     \"PRODUCTS\": [\r\n                //         {\r\n                //             \"elem\": \"0\",\r\n                //             //\"NTH_FLD_OVERRIDE_RUM\": 1,\r\n                //             //\"NTH_FLD_OVERRIDE_AMOUNT\": 1000,\r\n                //             \"DESCR\": \"\",   \r\n                //             \"NAME\": \"110217001\",\r\n                //             \"QUANTITY\": \"1\"\r\n                //         }\r\n                //     ]\r\n                // },\r\n                // {\r\n                //     \"elem\": \"4\",\r\n                //     \"Name\": \"110217001\",\r\n                //     \"NTH_FLD_BUNDLE_TYPE\": \"1\",\r\n                //     \"DISCOUNTS\": [\r\n                //         {\r\n                //             \"elem\": \"0\",\r\n                //             //\"NTH_FLD_OVERRIDE_RUM\": 1,\r\n                //             //\"NTH_FLD_OVERRIDE_AMOUNT\": 1000,\r\n                //             \"DESCR\": \"\",\r\n                //             \"NAME\": \"110217001_Usage_DO\",\r\n                //             \"QUANTITY\": \"1\"\r\n                //         }\r\n                //     ]\r\n                // }\r\n                // {\r\n                //     \"elem\": \"2\",\r\n                //     \"Name\": \"934070011\",\r\n                //     \"NTH_FLD_BUNDLE_TYPE\": \"1\",\r\n                //     \"DISCOUNTS\": [\r\n                //         {\r\n                //             \"elem\": \"0\",\r\n                //             //\"NTH_FLD_OVERRIDE_RUM\": 1,\r\n                //             //\"NTH_FLD_OVERRIDE_AMOUNT\": 1000,\r\n                //             \"DESCR\": \"Discount product\",\r\n                //             \"NAME\": \"934070011\",\r\n                //             \"QUANTITY\": \"1\"\r\n                //         }\r\n                //     ]\r\n                // }\r\n            ],\r\n            \"NAME\": \"308234\", //ใส่ PK id เค้าให้มาในdata\r\n            \"PACKAGE_ID\": \"308234\"\r\n        }\r\n    ],\r\n    \"POID\": \"0.0.0.1 /plan -1 7\",\r\n    \"SERVICES\": [\r\n        {\r\n            \"elem\": \"0\",\r\n            \"ALIAS_LIST\": [\r\n                {\r\n                    \"elem\": \"0\",\r\n                    \"NTH_FLD_PROP_TYPE\": \"22\",\r\n                    \"NAME\": \"{{$timestamp}}\" // unique \r\n                },\r\n                {\r\n                    \"elem\": \"1\",\r\n                    \"NTH_FLD_PROP_TYPE\": \"94\",\r\n                    \"NAME\": \"1{{$timestamp}}\" //unique เลขอะไรก็ได้อย่าซ่ำ\r\n                }\r\n            ],\r\n            \"SERVICE_ID\": \"308\" // เซอวิสอะไรดูจาก json ไฟล์ศึกษา\r\n        }\r\n    ]\r\n    // \"START_T\": \"2024-04-02T06:36:51Z\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://{{URL}}/brm-api/v1/subscription/createOrder",
+          "protocol": "http",
+          "host": [
+            "{{URL}}"
+          ],
+          "path": [
+            "brm-api",
+            "v1",
+            "subscription",
+            "createOrder"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "checkBillingAccountNew",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();\r",
+              "pm.environment.set(\"BillCycle\",jsonData.result[0].billCycle);\r",
+              "// pm.environment.set(\"CutOffDate\",jsonData.result[0].cutOffDate);\r",
+              "// -------------------------------------------------------\r",
+              "// เก็บ BillingAccount → TA\r",
+              "pm.environment.set(\"TA\", jsonData.result[0].billingAccount);\r",
+              "// -------------------------------------------------------\r",
+              "// ดึงค่า billGroup จาก response\r",
+              "let billGroup = pm.response.json().result[0].billGroup;\r",
+              "// แยกเอาเฉพาะค่า \"C1\" ด้านหน้า (ก่อน \" :\")\r",
+              "let code = billGroup.split(\" :\")[0];\r",
+              "// เก็บลงใน Environment Variable (หรือจะใช้ pm.collectionVariables.set ก็ได้)\r",
+              "pm.environment.set(\"BillGroupCode\", code);\r",
+              "// ------------------------------------------------------------\r",
+              "// ดึงค่า cutOffDate จาก response\r",
+              "let cutOffDateStr = pm.response.json().result[0].cutOffDate; // ตัวอย่าง \"02/03/2025\"\r",
+              "\r",
+              "// แปลงเป็นวันที่ (Date object)\r",
+              "let parts = cutOffDateStr.split(\"/\");\r",
+              "let day = parseInt(parts[0], 10);\r",
+              "let month = parseInt(parts[1], 10) - 1; // JavaScript months: 0-11\r",
+              "let year = parseInt(parts[2], 10);\r",
+              "\r",
+              "let dateObj = new Date(year, month, day);\r",
+              "\r",
+              "// บวก 1 เดือน\r",
+              "// dateObj.setMonth(dateObj.getMonth() + 1);\r",
+              "\r",
+              "// // ตรวจสอบกรณีข้ามปี เช่น 31/12/2025 + 1 เดือน → 31/01/2026\r",
+              "// // ถ้าเดือนหลังจากบวกไม่ตรงกับที่ควรจะเป็น (เพราะ JS ปรับอัตโนมัติ), ให้ set วันที่เป็นวันสุดท้ายของเดือน\r",
+              "// if (dateObj.getDate() !== day) {\r",
+              "//     dateObj.setDate(0); // setDate(0) = วันสุดท้ายของเดือนก่อนหน้า\r",
+              "// }\r",
+              "\r",
+              "// แปลงเป็น DDMMYYYY\r",
+              "let dd = String(dateObj.getDate()).padStart(2, '0');\r",
+              "let mm = String(dateObj.getMonth() + 1).padStart(2, '0'); // เดือนจริง 1-12\r",
+              "let yyyy = dateObj.getFullYear();\r",
+              "\r",
+              "let newCutOff_DDMMYYYY = `${dd}${mm}${yyyy}`;\r",
+              "let newCutOff_YYYYMMDD = `${yyyy}${mm}${dd}`;\r",
+              "\r",
+              "// เก็บไว้ใน Environment Variable\r",
+              "pm.environment.set(\"cutOffDate_DDMMYYYY\", newCutOff_DDMMYYYY);\r",
+              "pm.environment.set(\"cutOffDate_YYYYMMDD\", newCutOff_YYYYMMDD);\r",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"list_ba_file_data\": [\r\n        // \"{{BA}}\"\r\n       \"0207691327\"\r\n// \"0207690918\", \"0207690919\", \"0207690920\", \"0207690921\", \"0207690922\"\r\n    ],\r\n\r\n    \"bill_cycle\": \"\",\r\n    \"bill_group\": \"\",\r\n    \"cutoff_date\": \"\",\r\n    \"confirm\": true\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://{{URL02}}/api/v1/invoicing/checkBillingAccountNew",
+          "protocol": "http",
+          "host": [
+            "{{URL02}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "invoicing",
+            "checkBillingAccountNew"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GentAcc",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();\r",
+              "pm.environment.set(\"ProcessId\",jsonData.result.processId);\r",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// ฟังก์ชันสุ่มตัวเลข 4 หลัก ไม่ซ้ำกัน\r",
+              "function generateUnique4Digit() {\r",
+              "    let digits = [];\r",
+              "    while (digits.length < 5) {\r",
+              "        let rand = Math.floor(Math.random() * 10);\r",
+              "        if (!digits.includes(rand)) {\r",
+              "            digits.push(rand);\r",
+              "        }\r",
+              "    }\r",
+              "    return digits.join('');\r",
+              "}\r",
+              "\r",
+              "// สร้างตัวแปร\r",
+              "let uniqueDigits = generateUnique4Digit();\r",
+              "pm.environment.set(\"Unique4Digits\", uniqueDigits);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"task_program\": \"GentAcc\",\r\n    \"bill_order_number\": \"{{BillCycle}}{{BillGroupCode}}{{cutOffDate_YYYYMMDD}}_T{{Unique4Digits}}\",\r\n    \"bill_cycle\": \"{{BillCycle}}\",\r\n    \"bill_group\": \"{{BillGroupCode}}\",\r\n    \"cutoff_date\": \"{{cutOffDate_DDMMYYYY}}\",  \r\n    \"hot_bil_rc\": \"0\",\r\n    \"hot_bil_nrc\": \"0\",\r\n    \"hot_bil_usage\": \"0\",\r\n    \"create_by\": \"f6c369a9-2197-45e5-a0b1-26aaba878703\",\r\n    \"confirm\": false,\r\n    \"list_ba_file_data\": [\r\n        \"{{TA}}\"\r\n        //  \"1405691121\"\r\n        // \"0207690918\", \"0207690919\", \"0207690920\", \"0207690921\", \"0207690922\"\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://{{URL02}}/api/v1/invoicing/insertOPSInvoice",
+          "protocol": "http",
+          "host": [
+            "{{URL02}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "invoicing",
+            "insertOPSInvoice"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "New Request",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n\"process_id\":\"{{ProcessId}}\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://{{URL02}}/api/v1/invoicing/getGentAccInvoice",
+          "protocol": "http",
+          "host": [
+            "{{URL02}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "invoicing",
+            "getGentAccInvoice"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "getBIP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();\r",
+              "pm.environment.set(\"ProcessId\",jsonData.result[0].processId);\r",
+              "pm.environment.set(\"BillOrderNumber\",jsonData.result[0].billOrderNumber);\r",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));\r",
+              "\r",
+              "(async () => {\r",
+              "    await sleep(5000);\r",
+              "})();"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    // \"createDate\": \"19/05/2025\",\r\n    \"createBy\": \"นาย ทดสอบ SSO\",\r\n    \"firstLoadPage\": \"F\",\r\n    \"pagination\": {\r\n        \"current\": 1,\r\n        \"pageSize\": 5\r\n    },\r\n    \"sorter\": {}\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://{{URL02}}/api/v1/gentBIP/getBIP",
+          "protocol": "http",
+          "host": [
+            "{{URL02}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "gentBIP",
+            "getBIP"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Gent Proforma",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"process_id\": \"{{ProcessId}}\",\r\n    \"bill_order_number\": \"{{BillOrderNumber}}\",\r\n    \"task_program\": \"BIP\",\r\n    \"bill_mode\": \"Proforma\",\r\n    \"bill_cycle\": \"{{BillCycle}}\",\r\n    \"create_by\": \"f6c369a9-2197-45e5-a0b1-26aaba878706\",\r\n    \"cutoff_date\": \"{{cutOffDate_DDMMYYYY}}\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://10.44.82.57/OPS_SIT/api/v1/invoicing/insertOPSInvoice",
+          "protocol": "http",
+          "host": [
+            "10",
+            "44",
+            "82",
+            "57"
+          ],
+          "path": [
+            "OPS_SIT",
+            "api",
+            "v1",
+            "invoicing",
+            "insertOPSInvoice"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Gent Production",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"process_id\": \"{{ProcessId}}\",\r\n    \"bill_order_number\": \"{{BillOrderNumber}}\",\r\n    \"task_program\": \"BIP\",\r\n    \"bill_mode\": \"Production\",\r\n    \"bill_cycle\": \"{{BillCycle}}\",\r\n    \"create_by\": \"f6c369a9-2197-45e5-a0b1-26aaba878703\",\r\n    \"cutoff_date\":  \"{{cutOffDate_DDMMYYYY}}\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://bac-prod.itbc.intra.ntplc.co.th/api/v1/invoicing/insertOPSInvoice",
+          "protocol": "http",
+          "host": [
+            "bac-prod",
+            "itbc",
+            "intra",
+            "ntplc",
+            "co",
+            "th"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "invoicing",
+            "insertOPSInvoice"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3.Debt Enquiry",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// ดึง response JSON ทั้งหมด\r",
+              "let responseData = pm.response.json();\r",
+              "// ฟังก์ชันสำหรับการเก็บค่าทั้งหมดใน JSON ที่เป็น Object\r",
+              "function saveObjectToEnvironment(obj, parentKey) {\r",
+              "    for (const key in obj) {\r",
+              "        if (typeof obj[key] === \"object\" && !Array.isArray(obj[key])) {\r",
+              "            // ถ้าเป็น Object ที่ไม่ใช่ Array ให้เรียกซ้ำ\r",
+              "            saveObjectToEnvironment(obj[key], `${parentKey}_${key}`);\r",
+              "        } else if (Array.isArray(obj[key])) {\r",
+              "            // ถ้าเป็น Array ให้เรียกฟังก์ชัน saveArrayToEnvironment\r",
+              "            saveArrayToEnvironment(obj[key], `${parentKey}_${key}`);\r",
+              "        } else {\r",
+              "            // ถ้าเป็นค่าปกติให้เซ็ต Environment Variable\r",
+              "            pm.environment.set(`${parentKey}_${key}`, obj[key]);\r",
+              "        }\r",
+              "    }\r",
+              "}\r",
+              "\r",
+              "// ฟังก์ชันสำหรับการเก็บค่าทั้งหมดใน JSON ที่เป็น Array\r",
+              "function saveArrayToEnvironment(arr, parentKey) {\r",
+              "    arr.forEach((item, index) => {\r",
+              "        if (typeof item === \"object\") {\r",
+              "            // ถ้าเป็น Object ให้เรียกฟังก์ชัน saveObjectToEnvironment\r",
+              "            saveObjectToEnvironment(item, `${parentKey}_${index}`);\r",
+              "        } else {\r",
+              "            // ถ้าเป็นค่าปกติให้เซ็ต Environment Variable\r",
+              "            pm.environment.set(`${parentKey}_${index}`, item);\r",
+              "        }\r",
+              "    });\r",
+              "}\r",
+              "\r",
+              "// เริ่มเก็บค่าจาก JSON หลัก โดยตั้งชื่อ key เริ่มต้นเป็น root\r",
+              "saveObjectToEnvironment(responseData, \"root\");\r",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"ACCOUNT_NO\": \"{{BA}}\",\r\n    //  \"POID\":\"0.0.0.1 /account 1200137267 8\"\r\n    \"POID\": \"0.0.0.1 /account -1 0\"\r\n    // \"NTH_FLD_SSN_ID\": \"0711241141001\"\r\n    // \"BILL_NO\": \"B1-47829\"\r\n    // \"NTH_FLD_PROPERTY_VALUE\":\"1739778154\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{URL}}/brm-api/v1/payment/debtEnquiry",
+          "host": [
+            "{{URL}}"
+          ],
+          "path": [
+            "brm-api",
+            "v1",
+            "payment",
+            "debtEnquiry"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "3.Debt Enquiry",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"ACCOUNT_NO\": \"457027110\",\r\n    \"POID\": \"0.0.0.1 /account -1 0\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/brm-api/v1/payment/debtEnquiry",
+              "host": [
+                "{{URL}}"
+              ],
+              "path": [
+                "brm-api",
+                "v1",
+                "payment",
+                "debtEnquiry"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Date",
+              "value": "Thu, 14 Nov 2024 08:55:41 GMT"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "X-ORACLE-DMS-ECID",
+              "value": "ba90790a-e336-4b25-bcea-9dea4d01d9f8-0000200d"
+            },
+            {
+              "key": "X-ORACLE-DMS-RID",
+              "value": "0"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"ACCOUNTS\": [\n        {\n            \"NTH_FLD_ADDRESSES\": [\n                {\n                    \"NTH_FLD_ADDRESS_TYPE\": \"2\",\n                    \"NTH_FLD_BUILDING\": \"บจก.ศรีสวัสดิ์ พาวเวอร์ 2014\",\n                    \"NTH_FLD_COMPANY_TITLE\": \"\",\n                    \"NTH_FLD_HOUSE_NO\": \"99/392 อาคารศรีสวัสดิ์ ชั้นที่ 3,4,6\",\n                    \"NTH_FLD_LATITUDE\": \"\",\n                    \"NTH_FLD_LONGITUDE\": \"\",\n                    \"NTH_FLD_MOO\": \"MOO test2\",\n                    \"NTH_FLD_ROAD\": \"แจ้งวัฒนะ\",\n                    \"NTH_FLD_TROK\": \"TROK test2\",\n                    \"NTH_FLD_VILLAGE\": \"VILLAGE test2\",\n                    \"CITY\": \"เขตหลักสี่\",\n                    \"COMPANY\": \"บจก.ศรีสวัสดิ์ พาวเวอร์ 2014\",\n                    \"COUNTRY\": \"Thailand\",\n                    \"COUNTY\": \"แขวงทุ่งสองห้อง\",\n                    \"FIRST_NAME\": \"Timethai\",\n                    \"LAST_NAME\": \"Chaiyo\",\n                    \"MIDDLE_NAME\": \"\",\n                    \"PHONE\": \"9123456789004\",\n                    \"STATE\": \"กรุงเทพมหานคร\",\n                    \"TITLE\": \"\",\n                    \"ZIP\": \"10210\",\n                    \"elem\": \"0\"\n                }\n            ],\n            \"NTH_FLD_CUST_SEGMENT_LAYER1\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER1_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER2\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER2_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER3\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER3_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER4\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER4_DESC\": null,\n            \"NTH_FLD_SSN_ID\": \"0711241141001\",\n            \"ACCOUNT_NO\": \"0884112248\",\n            \"BRANCH_NO\": null,\n            \"INVOICES\": [\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"14/11/2024-13/11/2024\",\n                    \"NTH_FLD_ISSUE_T\": \"2024-11-13T08:38:30Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"56666.67\",\n                    \"AMOUNT_TAXED\": \"3966.67\",\n                    \"BILL_NO\": \"B1-47605\",\n                    \"CHARGED_FROM_T\": \"2024-11-13T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2024-11-13T08:38:30Z\",\n                    \"CURRENCY\": 764,\n                    \"CURRENT_BAL\": \"60633.34\",\n                    \"DUE\": \"60633.33\",\n                    \"DUE_T\": \"2024-12-03T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"ค่าใช้บริการรายเดือน Standard 4/1 Mbps\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"VALUE\": \"1731573183\",\n                                            \"elem\": \"94\"\n                                        },\n                                        {\n                                            \"VALUE\": \"17315731831\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"0\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"0\"\n                }\n            ],\n            \"POID\": \"0.0.0.1 /account 1197880755 8\",\n            \"elem\": \"0\"\n        }\n    ],\n    \"CONTEXT_INFO\": null,\n    \"ERROR_CODE\": null,\n    \"ERROR_DESCR\": null,\n    \"POID\": \"0.0.0.1 /account -1 0\"\n}"
+        },
+        {
+          "name": "3.Debt Enquiry",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"ACCOUNT_NO\": \"457027110\",\r\n    //  \"POID\":\"0.0.0.1 /account 1200137267 8\"\r\n    \"POID\": \"0.0.0.1 /account -1 0\"\r\n    // \"NTH_FLD_SSN_ID\": \"0711241141001\"\r\n    // \"BILL_NO\": \"B1-47829\"\r\n    // \"NTH_FLD_PROPERTY_VALUE\":\"1739778154\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/brm-api/v1/payment/debtEnquiry",
+              "host": [
+                "{{URL}}"
+              ],
+              "path": [
+                "brm-api",
+                "v1",
+                "payment",
+                "debtEnquiry"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Date",
+              "value": "Thu, 10 Apr 2025 09:58:08 GMT"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "X-ORACLE-DMS-ECID",
+              "value": "51a688f2-ca42-4cb3-b27c-87cd8b57335c-0003401a"
+            },
+            {
+              "key": "X-ORACLE-DMS-RID",
+              "value": "0"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"ACCOUNTS\": [\n        {\n            \"NTH_FLD_ADDRESSES\": [\n                {\n                    \"NTH_FLD_ADDRESS_TYPE\": \"2\",\n                    \"NTH_FLD_BUILDING\": \"อาคารพหลโยธินเพลส ชั้น 15\",\n                    \"NTH_FLD_COMPANY_TITLE\": \"\",\n                    \"NTH_FLD_HOUSE_NO\": \"414\",\n                    \"NTH_FLD_LATITUDE\": \"\",\n                    \"NTH_FLD_LONGITUDE\": \"\",\n                    \"NTH_FLD_MOO\": \"\",\n                    \"NTH_FLD_ROAD\": \"ถนน พหลโยธิน\",\n                    \"NTH_FLD_TROK\": \"\",\n                    \"NTH_FLD_VILLAGE\": \"\",\n                    \"CITY\": \"เขตพญาไท\",\n                    \"COMPANY\": \"บจก.แอดวานซ์ไวร์เลส เน็ทเวอร์ค\",\n                    \"COUNTRY\": \"764\",\n                    \"COUNTY\": \"แขวงสามเสนใน\",\n                    \"FIRST_NAME\": \"\",\n                    \"LAST_NAME\": \"\",\n                    \"MIDDLE_NAME\": \"\",\n                    \"PHONE\": \"\",\n                    \"STATE\": \"กรุงเทพมหานคร\",\n                    \"TITLE\": \"\",\n                    \"ZIP\": \"10400\",\n                    \"elem\": \"0\"\n                }\n            ],\n            \"NTH_FLD_CUST_SEGMENT_LAYER1\": \"11\",\n            \"NTH_FLD_CUST_SEGMENT_LAYER1_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER2\": \"34\",\n            \"NTH_FLD_CUST_SEGMENT_LAYER2_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER3\": \"\",\n            \"NTH_FLD_CUST_SEGMENT_LAYER3_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER4\": \"\",\n            \"NTH_FLD_CUST_SEGMENT_LAYER4_DESC\": null,\n            \"NTH_FLD_SSN_ID\": \"2201251732001\",\n            \"ACCOUNT_NO\": \"7000000002\",\n            \"BRANCH_NO\": \"00000\",\n            \"INVOICES\": [\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/04/2025-30/04/2025\",\n                    \"NTH_FLD_ISSUE_T\": \"2025-04-29T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-54225\",\n                    \"CHARGED_FROM_T\": \"2025-03-31T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2025-04-29T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"112243\",\n                    \"DUE_T\": \"2025-06-24T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"0\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"0\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/03/2025-31/03/2025\",\n                    \"NTH_FLD_ISSUE_T\": \"2025-03-30T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-54224\",\n                    \"CHARGED_FROM_T\": \"2025-02-28T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2025-03-30T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"0\",\n                    \"DUE_T\": \"2025-06-24T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"-112243\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"1\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/02/2025-28/02/2025\",\n                    \"NTH_FLD_ISSUE_T\": \"2025-02-27T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-53823\",\n                    \"CHARGED_FROM_T\": \"2025-01-31T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2025-02-27T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"0\",\n                    \"DUE_T\": \"2025-04-15T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"-112243\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"2\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/01/2025-31/01/2025\",\n                    \"NTH_FLD_ISSUE_T\": \"2025-01-30T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-53534\",\n                    \"CHARGED_FROM_T\": \"2024-12-31T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2025-01-30T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"0\",\n                    \"DUE_T\": \"2025-04-08T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"-112243\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"3\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/12/2024-31/12/2024\",\n                    \"NTH_FLD_ISSUE_T\": \"2024-12-30T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-49874\",\n                    \"CHARGED_FROM_T\": \"2024-11-30T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2024-12-30T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"0\",\n                    \"DUE_T\": \"2025-02-11T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"-112243\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"4\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/11/2024-30/11/2024\",\n                    \"NTH_FLD_ISSUE_T\": \"2024-11-29T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-49871\",\n                    \"CHARGED_FROM_T\": \"2024-10-31T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2024-11-29T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"112243\",\n                    \"DUE_T\": \"2025-02-11T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"0\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"5\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/10/2024-31/10/2024\",\n                    \"NTH_FLD_ISSUE_T\": \"2024-10-30T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"104900\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-49855\",\n                    \"CHARGED_FROM_T\": \"2024-09-30T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2024-10-30T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"112243\",\n                    \"DUE\": \"0\",\n                    \"DUE_T\": \"2025-02-11T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"LEASE LINE 64 KBPS.\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376184801\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                },\n                                {\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"CAT ID\",\n                                            \"VALUE\": \"17376188621\",\n                                            \"elem\": \"22\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"1\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"-112243\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"6\"\n                },\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/09/2024-30/09/2024\",\n                    \"NTH_FLD_ISSUE_T\": \"2024-09-29T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"0\",\n                    \"AMOUNT_TAXED\": \"7343\",\n                    \"BILL_NO\": \"B1-49851\",\n                    \"CHARGED_FROM_T\": \"2024-08-31T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2024-09-29T17:00:00Z\",\n                    \"CURRENCY\": 840,\n                    \"CURRENT_BAL\": \"0\",\n                    \"DUE\": \"0\",\n                    \"DUE_T\": \"2025-02-11T17:00:00Z\",\n                    \"PRODUCTS\": null,\n                    \"RECVD\": \"0\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": null,\n                            \"TAX_CODE\": null,\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"7\"\n                }\n            ],\n            \"POID\": \"0.0.0.1 /account 1213742808 16\",\n            \"elem\": \"0\"\n        }\n    ],\n    \"CONTEXT_INFO\": null,\n    \"ERROR_CODE\": null,\n    \"ERROR_DESCR\": null,\n    \"POID\": \"0.0.0.1 /account -1 0\"\n}"
+        },
+        {
+          "name": "จ่ายเกิน 1 เท่า",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"ACCOUNT_NO\": \"{{BA}}\",\r\n    //  \"POID\":\"0.0.0.1 /account 1200137267 8\"\r\n    \"POID\": \"0.0.0.1 /account -1 0\"\r\n    // \"NTH_FLD_SSN_ID\": \"0711241141001\"\r\n    // \"BILL_NO\": \"B1-47829\"\r\n    // \"NTH_FLD_PROPERTY_VALUE\":\"1739778154\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{URL}}/brm-api/v1/payment/debtEnquiry",
+              "host": [
+                "{{URL}}"
+              ],
+              "path": [
+                "brm-api",
+                "v1",
+                "payment",
+                "debtEnquiry"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Date",
+              "value": "Fri, 23 May 2025 02:47:36 GMT"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "X-ORACLE-DMS-ECID",
+              "value": "7753b0bd-2557-4ce6-9ff6-3d5c9b53b5ef-00003522"
+            },
+            {
+              "key": "X-ORACLE-DMS-RID",
+              "value": "0"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"ACCOUNTS\": [\n        {\n            \"NTH_FLD_ADDRESSES\": [\n                {\n                    \"NTH_FLD_ADDRESS_TYPE\": \"2\",\n                    \"NTH_FLD_BUILDING\": \"covalense\",\n                    \"NTH_FLD_COMPANY_TITLE\": \"\",\n                    \"NTH_FLD_HOUSE_NO\": \"No.40\",\n                    \"NTH_FLD_LATITUDE\": \"58.0845\",\n                    \"NTH_FLD_LONGITUDE\": \"-7.1985\",\n                    \"NTH_FLD_MOO\": \"2\",\n                    \"NTH_FLD_ROAD\": \"Lloyd Key\",\n                    \"NTH_FLD_TROK\": \"2\",\n                    \"NTH_FLD_VILLAGE\": \"2\",\n                    \"CITY\": \"East Vanessa\",\n                    \"COMPANY\": \"Price and Sons\",\n                    \"COUNTRY\": \"764\",\n                    \"COUNTY\": \"Rowe Manor\",\n                    \"FIRST_NAME\": \"Toney\",\n                    \"LAST_NAME\": \"Beatty\",\n                    \"MIDDLE_NAME\": \"Wesker\",\n                    \"PHONE\": \"993-958-8041\",\n                    \"STATE\": \"Bangalore\",\n                    \"TITLE\": \"\",\n                    \"ZIP\": \"3173\",\n                    \"elem\": \"0\"\n                }\n            ],\n            \"NTH_FLD_ADVANCE_AMOUNT\": \"0\",\n            \"NTH_FLD_CUST_SEGMENT_LAYER1\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER1_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER2\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER2_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER3\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER3_DESC\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER4\": null,\n            \"NTH_FLD_CUST_SEGMENT_LAYER4_DESC\": null,\n            \"NTH_FLD_SSN_ID\": \"3709576522291\",\n            \"ACCOUNT_NO\": \"766181681\",\n            \"BRANCH_NO\": \"00000\",\n            \"INVOICES\": [\n                {\n                    \"NTH_FLD_BAD_DEBT\": \"Normal Debt\",\n                    \"NTH_FLD_BILL_PERIOD\": \"01/03/2025-31/03/2025\",\n                    \"NTH_FLD_ISSUE_T\": \"2025-03-30T17:00:00Z\",\n                    \"ADJUSTED\": \"0\",\n                    \"AMOUNT\": \"1000\",\n                    \"AMOUNT_TAXED\": \"70\",\n                    \"BILL_NO\": \"B1-57854\",\n                    \"CHARGED_FROM_T\": \"2025-02-28T17:00:00Z\",\n                    \"CHARGED_TO_T\": \"2025-03-30T17:00:00Z\",\n                    \"CURRENCY\": 764,\n                    \"CURRENT_BAL\": \"1070\",\n                    \"DUE\": \"1070\",\n                    \"DUE_T\": \"2025-06-21T17:00:00Z\",\n                    \"PRODUCTS\": [\n                        {\n                            \"NAME\": \"ค่าใช้บริการรายเดือน\",\n                            \"SERVICES\": [\n                                {\n                                    \"NTH_FLD_COST_CENTER\": null,\n                                    \"NTH_FLD_SERVICE_PROPERTY\": [\n                                        {\n                                            \"NAME\": \"ONECONNECT\",\n                                            \"VALUE\": \"1747968387\",\n                                            \"elem\": \"14\"\n                                        },\n                                        {\n                                            \"NAME\": \"ONE Connect CAT ID\",\n                                            \"VALUE\": \"1747968387\",\n                                            \"elem\": \"37\"\n                                        }\n                                    ],\n                                    \"STATUS\": \"10100\",\n                                    \"elem\": \"0\"\n                                }\n                            ],\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"RECVD\": \"0\",\n                    \"TAXES\": [\n                        {\n                            \"NTH_FLD_VAT\": \"0.07\",\n                            \"TAX_CODE\": \"VAT_7_EXC\",\n                            \"elem\": \"0\"\n                        }\n                    ],\n                    \"TOTAL_VOLUME\": 0,\n                    \"elem\": \"0\"\n                }\n            ],\n            \"POID\": \"0.0.0.1 /account 1299009958 8\",\n            \"elem\": \"0\"\n        }\n    ],\n    \"CONTEXT_INFO\": null,\n    \"ERROR_CODE\": null,\n    \"ERROR_DESCR\": null,\n    \"POID\": \"0.0.0.1 /account -1 0\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "New Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"NTH_FLD_ASYNC_FLAG\": \"0\",\n    \"NTH_FLD_BILLING_ACCOUNT_NO\": \"1732333182\",\n    \"ACCTINFO\": [\n        {\n            \"elem\": \"0\",\n            \"BUSINESS_TYPE\": \"6\",\n            \"CURRENCY\": \"764\",\n            \"GL_SEGMENT\": \"business unit\"\n        }\n    ],\n    \"BILLINFO\": [\n        {\n            \"elem\": \"0\",\n            \"ACTG_CYCLE_DOM\": \"2\"\n        }\n    ],\n    \"CONTEXT_INFO\": {\n        \"CORRELATION_ID\": \"3211682409120\",\n        \"EXTERNAL_USER\": \"NT-THAI-BRM\"\n    },\n    \"ORDERS\": [\n        {\n            \"elem\": \"0\",\n            \"ORDER_ID\": \"1689331810\",\n            \"ORDER_TYPE\": \"UBA\"\n        }\n    ],\n    \"POID\": \"0.0.0.1 /account 1 42\",\n    \"PROFILES\": [\n        {\n            \"elem\": \"1\",\n            \"INHERITED_INFO\": {\n                \"NTH_FLD_CUSTOMER_DETAILS\": [\n                    {\n                        \"elem\": \"0\",\n                        \"NTH_FLD_ADDRESSES\": [\n                            {\n                                \"elem\": \"2\",\n                                \"NTH_FLD_ADDRESS_TYPE\": \"2\",\n                                \"NTH_FLD_BUILDING\": \"prestige apartments\",\n                                \"NTH_FLD_HOUSE_NO\": \"No.40\",\n                                \"NTH_FLD_LATITUDE\": \"77.6245E\",\n                                \"NTH_FLD_LONGITUDE\": \"12.9352N\",\n                                \"NTH_FLD_MOO\": \"abcd\",\n                                \"NTH_FLD_ROAD\": \"ring road\",\n                                \"NTH_FLD_TROK\": \"efg\",\n                                \"NTH_FLD_VILLAGE\": \"xyz\",\n                                \"CITY\": \"Marathalli\",\n                                \"COMPANY\": \"CDS\",\n                                \"COUNTRY\": \"USA\",\n                                \"COUNTY\": \"Bangalore\",\n                                \"FIRST_NAME\": \"John\",\n                                \"LAST_NAME\": \"Kennedy\",\n                                \"MIDDLE_NAME\": \"Kumars\",\n                                \"PHONE\": \"9995600021\",\n                                \"STATE\": \"Bangalore\",\n                                \"TITLE\": \"Mr\",\n                                \"ZIP\": \"5600021\"\n                            }\n                        ],\n                        \"NTH_FLD_BILLING_GROUP\": \"1431\",\n                        \"NTH_FLD_BILL_COUNTY\": \"แขวงห้วยขวาง\",\n                        \"NTH_FLD_BILL_DISP_METHOD\": \"1\",\n                        \"NTH_FLD_BILL_FMT_OPT\": \"1\",\n                        \"NTH_FLD_BILL_PERIOD\": \"MA1\",\n                        \"NTH_FLD_CONTACT_ADDRESS\": [\n                            {\n                                \"elem\": \"1\",\n                                \"NTH_FLD_ADDRESS_TYPE\": \"1\",\n                                \"EMAIL_ADDR\": \"Vegita.ultraego@gmail_com\",\n                                \"FAX_PHONE\": \"99900999000\",\n                                \"FIRST_NAME\": \"Vegita\",\n                                \"HOME_PHONE\": \"99900999000\",\n                                \"LAST_NAME\": \"Saiyajin\",\n                                \"MIDDLE_NAME\": \"S\",\n                                \"PHONE\": \"99900999000\",\n                                \"TITLE\": \"Mr.\"\n                            }\n                        ],\n                        \"NTH_FLD_CUSTOMER_GROUP\": \"3435454\",\n                        \"NTH_FLD_CUSTOMER_SERVICE_CENTERS\": [\n                            {\n                                \"elem\": \"1\",\n                                \"NTH_FLD_SERVICE_CENTER_ID\": \"1\"\n                            },\n                            {\n                                \"elem\": \"2\",\n                                \"NTH_FLD_SERVICE_CENTER_ID\": \"1\"\n                            },\n                            {\n                                \"elem\": \"3\",\n                                \"NTH_FLD_SERVICE_CENTER_ID\": \"1\"\n                            },\n                            {\n                                \"elem\": \"4\",\n                                \"NTH_FLD_SERVICE_CENTER_ID\": \"3132\"\n                            },\n                            {\n                                \"elem\": \"6\",\n                                \"NTH_FLD_SERVICE_CENTER_ID\": \"1\"\n                            }\n                        ],\n                        \"NTH_FLD_EMPLOYEE_ID\": \"11\",\n                        \"NTH_FLD_EXTERNAL_ID\": \"3424233232323232\",\n                        \"NTH_FLD_EXTERNAL_ID_TYPE\": \"223\",\n                        \"NTH_FLD_EXT_DATA\": [\n                            {\n                                \"elem\": \"20010\",\n                                \"PARAM_NAME\": \"DTitle\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20011\",\n                                \"PARAM_NAME\": \"DFirstName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20012\",\n                                \"PARAM_NAME\": \"DLastName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20013\",\n                                \"PARAM_NAME\": \"DCompanyName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20014\",\n                                \"PARAM_NAME\": \"DAddress1\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20015\",\n                                \"PARAM_NAME\": \"DAddress2\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20016\",\n                                \"PARAM_NAME\": \"DAddress3\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20021\",\n                                \"PARAM_NAME\": \"DCountry\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20022\",\n                                \"PARAM_NAME\": \"VatDisplay\",\n                                \"PARAM_VALUE\": \"1\"\n                            },\n                            {\n                                \"elem\": \"20017\",\n                                \"PARAM_NAME\": \"DCounty\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20002\",\n                                \"PARAM_NAME\": \"Attention\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20008\",\n                                \"PARAM_NAME\": \"InvoiceType\",\n                                \"PARAM_VALUE\": \"1\"\n                            },\n                            {\n                                \"elem\": \"20018\",\n                                \"PARAM_NAME\": \"DCity\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20019\",\n                                \"PARAM_NAME\": \"DState\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20020\",\n                                \"PARAM_NAME\": \"DZipCode\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20023\",\n                                \"PARAM_NAME\": \"GsoNo\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20024\",\n                                \"PARAM_NAME\": \"PoNo\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20025\",\n                                \"PARAM_NAME\": \"BillRemark\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20027\",\n                                \"PARAM_NAME\": \"CarrierType\",\n                                \"PARAM_VALUE\": \"1\"\n                            },\n                            {\n                                \"elem\": \"20030\",\n                                \"PARAM_NAME\": \"StatementParent\",\n                                \"PARAM_VALUE\": \"1\"\n                            },\n                            {\n                                \"elem\": \"20032\",\n                                \"PARAM_NAME\": \"BillDisplay\",\n                                \"PARAM_VALUE\": \"1\"\n                            },\n                            {\n                                \"elem\": \"20033\",\n                                \"PARAM_NAME\": \"DeliVatThaiTitleLkp\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20034\",\n                                \"PARAM_NAME\": \"DeliVatFirstName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20035\",\n                                \"PARAM_NAME\": \"DeliVatLastName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20037\",\n                                \"PARAM_NAME\": \"DeliVatCompName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20038\",\n                                \"PARAM_NAME\": \"DeliVatAddrLine1\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20039\",\n                                \"PARAM_NAME\": \"DeliVatAddrLine2\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20040\",\n                                \"PARAM_NAME\": \"DeliVatAddrLine3\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20041\",\n                                \"PARAM_NAME\": \"DeliVatAddrLine4\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20042\",\n                                \"PARAM_NAME\": \"DeliVatAddrKhetAmphur\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20043\",\n                                \"PARAM_NAME\": \"DeliVatAddrProvinceLkp\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20044\",\n                                \"PARAM_NAME\": \"DeliVatAddrPostCode\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20045\",\n                                \"PARAM_NAME\": \"DeliVatAddrCountryLkp\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20048\",\n                                \"PARAM_NAME\": \"branch_id\",\n                                \"PARAM_VALUE\": \"00000\"\n                            },\n                            {\n                                \"elem\": \"20060\",\n                                \"PARAM_NAME\": \"InternalSalesRef\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20061\",\n                                \"PARAM_NAME\": \"SalesName\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20062\",\n                                \"PARAM_NAME\": \"SalesTerritory\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20063\",\n                                \"PARAM_NAME\": \"eGP_Contact\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20064\",\n                                \"PARAM_NAME\": \"eGP_StartDate\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20065\",\n                                \"PARAM_NAME\": \"eGP_EndDate\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20066\",\n                                \"PARAM_NAME\": \"eGP_Value\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20067\",\n                                \"PARAM_NAME\": \"PPM_NUMBER\",\n                                \"PARAM_VALUE\": \" \"\n                            },\n                            {\n                                \"elem\": \"20068\",\n                                \"PARAM_NAME\": \"ACCUMULATED_CHARGE\",\n                                \"PARAM_VALUE\": \"0\"\n                            },\n                            {\n                                \"elem\": \"20069\",\n                                \"PARAM_NAME\": \"Bill Period SVC ACT_DT\",\n                                \"PARAM_VALUE\": \"0\"\n                            }\n                        ],\n                        \"NTH_FLD_FRANCHISE_TAX_CODE\": \"1\",\n                        \"NTH_FLD_LANG_CODE\": \"22\",\n                        \"NTH_FLD_NATIONALITY\": \"TH\",\n                        \"NTH_FLD_NO_BILL\": \"0\",\n                        \"NTH_FLD_PREFERRED_LANG\": \"22\",\n                        \"NTH_FLD_RATE_CLASS\": \"2\",\n                        \"NTH_FLD_REGISTER_TYPE\": \" \",\n                        \"NTH_FLD_REGISTRATION_FORM\": \"3432\",\n                        \"NTH_FLD_SALES_CENTER_ID\": \"1000\",\n                        \"NTH_FLD_SALES_CODE\": \"ccrhcr07\",\n                        \"NTH_FLD_SSN_ID\": \"344343\",\n                        \"NTH_FLD_UNIT_COST_CENTER\": \"2O10313\",\n                        \"NTH_FLD_VAT_COUNTY\": \"แขวงห้วยขวาง\",\n                        \"NTH_FLD_VAT_DISP_METHOD\": \"5\",\n                        \"NTH_FLD_VIP_CODE\": \"0\",\n                        \"CREDIT_THRESHOLDS\": \"5000\",\n                        \"CUSTOMER_SEGMENT\": \"2\",\n                        \"CUSTOMER_TYPE\": \"1\",\n                        \"EMAIL_ADDR\": \"Support@truecorp.co.th\"\n                    }\n                ]\n            },\n            \"PROFILE_OBJ\": \"0.0.0.1 /profile/nth_customer_details -1 0\"\n        }\n    ],\n    \"PROGRAM_NAME\": \"UPDATE_BA\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{URL}}/brm-api/v1/account/updateBillingAccount",
+          "host": [
+            "{{URL}}"
+          ],
+          "path": [
+            "brm-api",
+            "v1",
+            "account",
+            "updateBillingAccount"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

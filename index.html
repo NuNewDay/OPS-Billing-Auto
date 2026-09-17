@@ -837,9 +837,20 @@
           <input type="text" id="cfg-env" list="env-list" value="10.44.82.106:7500" placeholder="10.44.82.106:7500" />
           <datalist id="env-list">
             <option value="10.44.82.106:7500">DEV — 10.44.82.106:7500</option>
-            <option value="SIT">SIT — 10.44.82.57 (Proforma)</option>
+            <option value="SIT">SIT — 10.44.82.57</option>
             <option value="Production">Production — bac-prod.itbc.intra.ntplc.co.th</option>
           </datalist>
+        </div>
+
+        <div class="field">
+          <label>📑 โหมดการออกบิล (Bill Mode)</label>
+          <select id="cfg-bill-mode">
+            <option value="Production" selected>Production — ยืนยันออกบิลจริง (Production Mode)</option>
+            <option value="Proforma">Proforma — ออกบิลร่าง (Proforma Mode)</option>
+          </select>
+          <div style="font-size:11px; color:var(--text-3); margin-top:4px;">
+            💡 เลือก <b>Production</b> เพื่อให้ระบบอัปเดตสถานะในเว็บ OPS เป็น Production โดยตรง
+          </div>
         </div>
 
         <div class="field">
@@ -1104,12 +1115,16 @@
     // ═══════════════════════════════════════════════════════
     //  BA Progress Cards
     // ═══════════════════════════════════════════════════════
-    const STEPS = [
-      { key: 'checkBillingAccountNew', label: 'Check BA' },
-      { key: 'GentAcc', label: 'GentAcc' },
-      { key: 'getBIP', label: 'Get BIP' },
-      { key: 'GentProduction', label: 'Production' },
-    ];
+    let currentBillMode = 'Production';
+
+    function getSteps() {
+      return [
+        { key: 'checkBillingAccountNew', label: 'Check BA' },
+        { key: 'GentAcc', label: 'GentAcc' },
+        { key: 'getBIP', label: 'Get BIP' },
+        { key: 'GentProduction', label: currentBillMode || 'Production' },
+      ];
+    }
 
     function createBatchCard(totalBAs) {
       const list = document.getElementById('ba-progress-list');
@@ -1119,11 +1134,11 @@
       div.id = 'card-batch';
       div.innerHTML = `
         <div class="ba-header">
-          <div class="ba-num">📦 ออกบิล (1 ไฟล์ = 1 บิล) <span class="ba-idx">รวม ${totalBAs} BA</span></div>
+          <div class="ba-num">📦 ออกบิล [${currentBillMode}] (1 ไฟล์ = 1 บิล) <span class="ba-idx">รวม ${totalBAs} BA</span></div>
           <div class="ba-status-icon" id="icon-batch">⏳</div>
         </div>
         <div class="step-row" id="steps-batch">
-          ${STEPS.map(s => `
+          ${getSteps().map(s => `
             <div class="step-pill" id="pill-batch-${s.key}">
               <div class="dot"></div>${s.label}
             </div>`).join('')}
@@ -1140,11 +1155,11 @@
       div.id = `card-${ba}`;
       div.innerHTML = `
         <div class="ba-header">
-          <div class="ba-num">⚡ BA: ${ba} <span class="ba-idx">#${index}/${total}</span></div>
+          <div class="ba-num">⚡ BA: ${ba} <span class="ba-idx">#${index}/${total}</span> [${currentBillMode}]</div>
           <div class="ba-status-icon" id="icon-${ba}">⏳</div>
         </div>
         <div class="step-row" id="steps-${ba}">
-          ${STEPS.map(s => `
+          ${getSteps().map(s => `
             <div class="step-pill" id="pill-${ba}-${s.key}">
               <div class="dot"></div>${s.label}
             </div>`).join('')}
@@ -1294,6 +1309,8 @@
     async function startRun(mode = 'batch') {
       const url02 = document.getElementById('cfg-url02').value.trim();
       const env = document.getElementById('cfg-env').value;
+      const billMode = document.getElementById('cfg-bill-mode')?.value || 'Production';
+      currentBillMode = billMode;
       const user = document.getElementById('cfg-user').value.trim();
       const uuid = document.getElementById('cfg-uuid').value.trim();
       const suffix = document.getElementById('cfg-suffix')?.value.trim() || '';
@@ -1324,9 +1341,9 @@
       document.getElementById('status-badge').style.color = 'var(--warn)';
 
       const modeText = mode === 'batch' ? 'ออกบิลรวม (1 ไฟล์ = 1 บิล)' : 'ออกบิลแยก (1 BA = 1 บิล)';
-      log('start', `เริ่ม Session${isSimulation ? ' [โหมดทดสอบจำลอง]' : ''} — ${modeText} | ${baRows.length} BA | ENV: ${env}`);
+      log('start', `เริ่ม Session${isSimulation ? ' [โหมดทดสอบจำลอง]' : ''} — ${modeText} [${billMode}] | ${baRows.length} BA | ENV: ${env}`);
 
-      const config = { url02, environment: env, createBy: user, uuid, suffix, isSimulation };
+      const config = { url02, environment: env, billMode, createBy: user, uuid, suffix, isSimulation };
 
       // Open SSE
       if (eventSource) eventSource.close();

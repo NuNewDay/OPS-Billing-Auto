@@ -291,8 +291,9 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
         data: { processId, billOrderNumber },
       });
 
-      const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
-      const billMode = isProduction ? 'Production' : 'Proforma';
+      const billMode = (config.billMode && config.billMode.trim())
+        ? config.billMode.trim()
+        : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
 
       sendEvent(sessionId, {
         type: 'step_start',
@@ -479,8 +480,9 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
     });
 
     // ── STEP 4: GentProduction / Proforma
-    const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
-    const billMode = isProduction ? 'Production' : 'Proforma';
+    const billMode = (config.billMode && config.billMode.trim())
+      ? config.billMode.trim()
+      : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
     const prodUrl = `${baseUrl}/api/v1/invoicing/insertOPSInvoice`;
 
     sendEvent(sessionId, {
@@ -643,8 +645,9 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         data: { processId, billOrderNumber },
       });
 
-      const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
-      const billMode = isProduction ? 'Production' : 'Proforma';
+      const billMode = (config.billMode && config.billMode.trim())
+        ? config.billMode.trim()
+        : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
 
       sendEvent(sessionId, {
         type: 'step_start',
@@ -821,8 +824,9 @@ async function runBatchBillingFlow(baList, config, sessionId) {
     });
 
     // ── STEP 4: GentProduction / Proforma
-    const isProduction = environment === 'Production' || String(environment).toLowerCase().includes('prod');
-    const billMode = isProduction ? 'Production' : 'Proforma';
+    const billMode = (config.billMode && config.billMode.trim())
+      ? config.billMode.trim()
+      : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
     const prodUrl = `${baseUrl}/api/v1/invoicing/insertOPSInvoice`;
 
     sendEvent(sessionId, {

@@ -845,11 +845,12 @@
         <div class="field">
           <label>📑 โหมดการออกบิล (Bill Mode)</label>
           <select id="cfg-bill-mode">
-            <option value="Production" selected>Production — ยืนยันออกบิลจริง (Production Mode)</option>
-            <option value="Proforma">Proforma — ออกบิลร่าง (Proforma Mode)</option>
+            <option value="Auto" selected>⚡ Auto — ทำ Proforma ก่อนแล้วต่อ Production อัตโนมัติ (แนะนำ)</option>
+            <option value="Production">Production — ยืนยันออกบิลจริงทันที (ไม่ทำ Proforma)</option>
+            <option value="Proforma">Proforma — ออกเฉพาะบิลร่าง (ไม่ทำ Production)</option>
           </select>
           <div style="font-size:11px; color:var(--text-3); margin-top:4px;">
-            💡 เลือก <b>Production</b> เพื่อให้ระบบอัปเดตสถานะในเว็บ OPS เป็น Production โดยตรง
+            💡 เลือก <b>Auto</b> เพื่อให้ระบบคำนวณ Proforma ก่อน แล้วนำผลลัพธ์ไปออก Production จริงทันที
           </div>
         </div>
 
@@ -949,7 +950,8 @@
         <span class="btn-label">ออกบิลแบบแยก (1 BA = 1 บิล)</span>
       </button>
 
-      <button id="abort-btn" onclick="abortRun()" style="display:none; padding:14px 22px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.5); border-radius:var(--radius); color:#fca5a5; font-family:'Prompt',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; align-items:center; gap:8px;">
+      <button id="abort-btn" onclick="abortRun()"
+        style="display:none; padding:14px 22px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.5); border-radius:var(--radius); color:#fca5a5; font-family:'Prompt',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; align-items:center; gap:8px;">
         <span>⏹️</span><span>ยกเลิก / หยุดรัน</span>
       </button>
     </div>
@@ -1119,15 +1121,32 @@
     // ═══════════════════════════════════════════════════════
     //  BA Progress Cards
     // ═══════════════════════════════════════════════════════
-    let currentBillMode = 'Production';
+    let currentBillMode = 'Auto';
 
     function getSteps() {
-      return [
-        { key: 'checkBillingAccountNew', label: 'Check BA' },
-        { key: 'GentAcc', label: 'GentAcc' },
-        { key: 'getBIP', label: 'Get BIP' },
-        { key: 'GentProduction', label: currentBillMode || 'Production' },
-      ];
+      if (currentBillMode === 'Proforma') {
+        return [
+          { key: 'checkBillingAccountNew', label: 'Check BA' },
+          { key: 'GentAcc', label: 'GentAcc' },
+          { key: 'getBIP', label: 'Get BIP' },
+          { key: 'GentProforma', label: 'Proforma' },
+        ];
+      } else if (currentBillMode === 'Production') {
+        return [
+          { key: 'checkBillingAccountNew', label: 'Check BA' },
+          { key: 'GentAcc', label: 'GentAcc' },
+          { key: 'getBIP', label: 'Get BIP' },
+          { key: 'GentProduction', label: 'Production' },
+        ];
+      } else {
+        return [
+          { key: 'checkBillingAccountNew', label: 'Check BA' },
+          { key: 'GentAcc', label: 'GentAcc' },
+          { key: 'getBIP', label: 'Get BIP' },
+          { key: 'GentProforma', label: 'Proforma' },
+          { key: 'GentProduction', label: 'Production' },
+        ];
+      }
     }
 
     function createBatchCard(totalBAs) {

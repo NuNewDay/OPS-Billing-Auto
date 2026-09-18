@@ -1509,9 +1509,13 @@
           break;
 
         case 'step_done':
-          updateStepPill(e.ba, e.step, 'success');
+          updateStepPill(e.ba, e.step, e.status === 'error' ? 'error' : 'success');
           if (e.data) showDetail(e.ba, e.data);
-          log('ok', `✓ ${e.ba ? `[${e.ba}] ` : ''}${e.step}`);
+          if (e.status === 'error') {
+            log('warn', `⚠️ ${e.ba ? `[${e.ba}] ` : ''}${e.step}: ${e.message || 'เกิดข้อผิดพลาด'}`);
+          } else {
+            log('ok', `✓ ${e.ba ? `[${e.ba}] ` : ''}${e.step}`);
+          }
           break;
 
         case 'ba_complete':

@@ -591,7 +591,7 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
 
         if (shouldRunProduction) {
           // รอให้สถานะ Proforma ใน OPS ประมวลผลเสร็จ (Finish) ก่อนปิดสเต็ป Proforma
-          for (let pfWait = 1; pfWait <= 8; pfWait++) {
+          for (let pfWait = 1; pfWait <= 25; pfWait++) {
             if (!activeRuns.has(sessionId)) {
               throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
             }
@@ -604,12 +604,22 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
               );
               const items = bipRes.data?.result || [];
               const matched = items.find(
-                (item) => String(item.processId) === String(result.processId)
+                (item) => String(item.processId) === String(result.processId) ||
+                          String(item.billOrderNumber) === String(result.billOrderNumber)
               );
-              if (matched && matched.status === 'Finish' && matched.billMode === 'Proforma') {
-                break;
+              if (matched) {
+                if (matched.errMessage) {
+                  throw new Error(matched.errMessage);
+                }
+                if (matched.status === 'Finish' && matched.billMode === 'Proforma') {
+                  break;
+                }
               }
-            } catch (e) {}
+            } catch (e) {
+              if (e.message && !e.message.includes('timeout') && !e.message.includes('Network Error')) {
+                throw e;
+              }
+            }
           }
         }
 
@@ -649,29 +659,75 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
         message: `[${ba}] ยืนยันออกบิล Production (Process ID: ${result.processId})...`,
       });
 
-      await axios.post(
-        prodUrl,
-        {
-          process_id: result.processId,
-          bill_order_number: result.billOrderNumber,
-          task_program: 'BIP',
-          bill_mode: 'Production',
-          bill_cycle: result.billCycle,
-          create_by: creatorUuid,
-          cutoff_date: cutOff.DDMMYYYY,
-        },
-        { timeout: 30000 }
-      );
+      try {
+        await axios.post(
+          prodUrl,
+          {
+            process_id: result.processId,
+            bill_order_number: result.billOrderNumber,
+            task_program: 'BIP',
+            bill_mode: 'Production',
+            bill_cycle: result.billCycle,
+            create_by: creatorUuid,
+            cutoff_date: cutOff.DDMMYYYY,
+          },
+          { timeout: 30000 }
+        );
 
-      result.stepStatus.GentProduction = 'success';
+        // รอระบบ OPS ประมวลผล Production ให้เสร็จสมบูรณ์ (Finish)
+        for (let prodWait = 1; prodWait <= 40; prodWait++) {
+          if (!activeRuns.has(sessionId)) {
+            throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+          }
+          await sleep(2000);
+          try {
+            const bipRes = await axios.post(
+              `${baseUrl}/api/v1/gentBIP/getBIP`,
+              { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
+              { timeout: 15000 }
+            );
+            const items = bipRes.data?.result || [];
+            const matched = items.find(
+              (item) => String(item.processId) === String(result.processId) ||
+                        String(item.billOrderNumber) === String(result.billOrderNumber)
+            );
+            if (matched) {
+              if (matched.errMessage) {
+                throw new Error(matched.errMessage);
+              }
+              if (matched.status === 'Finish' || (matched.status && !matched.status.toLowerCase().includes('progress'))) {
+                break;
+              }
+            }
+          } catch (e) {
+            if (e.message && !e.message.includes('timeout') && !e.message.includes('Network Error')) {
+              throw e;
+            }
+          }
+        }
 
-      sendEvent(sessionId, {
-        type: 'step_done',
-        ba,
-        step: 'GentProduction',
-        status: 'success',
-        data: { billMode: 'Production', processId: result.processId, billOrderNumber: result.billOrderNumber },
-      });
+        result.stepStatus.GentProduction = 'success';
+
+        sendEvent(sessionId, {
+          type: 'step_done',
+          ba,
+          step: 'GentProduction',
+          status: 'success',
+          data: { billMode: 'Production', processId: result.processId, billOrderNumber: result.billOrderNumber },
+        });
+      } catch (prodErr) {
+        const errMsg = prodErr.response?.data?.message || prodErr.message || 'Production Failed';
+        console.warn(`[${ba}] [GentProduction Error] ${errMsg}`);
+        result.stepStatus.GentProduction = 'error';
+        sendEvent(sessionId, {
+          type: 'step_done',
+          ba,
+          step: 'GentProduction',
+          status: 'error',
+          message: errMsg,
+        });
+        throw new Error(`[${ba}] GentProduction: ${errMsg}`);
+      }
     }
 
     result.status = 'success';
@@ -1091,7 +1147,7 @@ async function runBatchBillingFlow(baList, config, sessionId) {
 
         if (shouldRunProduction) {
           // รอให้สถานะ Proforma ใน OPS ประมวลผลเสร็จ (Finish) ก่อนปิดสเต็ป Proforma
-          for (let pfWait = 1; pfWait <= 8; pfWait++) {
+          for (let pfWait = 1; pfWait <= 25; pfWait++) {
             if (!activeRuns.has(sessionId)) {
               throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
             }
@@ -1104,12 +1160,22 @@ async function runBatchBillingFlow(baList, config, sessionId) {
               );
               const items = bipRes.data?.result || [];
               const matched = items.find(
-                (item) => String(item.processId) === String(batchResult.processId)
+                (item) => String(item.processId) === String(batchResult.processId) ||
+                          String(item.billOrderNumber) === String(batchResult.billOrderNumber)
               );
-              if (matched && matched.status === 'Finish' && matched.billMode === 'Proforma') {
-                break;
+              if (matched) {
+                if (matched.errMessage) {
+                  throw new Error(matched.errMessage);
+                }
+                if (matched.status === 'Finish' && matched.billMode === 'Proforma') {
+                  break;
+                }
               }
-            } catch (e) {}
+            } catch (e) {
+              if (e.message && !e.message.includes('timeout') && !e.message.includes('Network Error')) {
+                throw e;
+              }
+            }
           }
         }
 
@@ -1146,28 +1212,73 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         message: `ยืนยันออกบิล Production (1 บิล ${count} BA) ยืนยัน Process ID: ${batchResult.processId}...`,
       });
 
-      await axios.post(
-        prodUrl,
-        {
-          process_id: batchResult.processId,
-          bill_order_number: batchResult.billOrderNumber,
-          task_program: 'BIP',
-          bill_mode: 'Production',
-          bill_cycle: batchResult.billCycle,
-          create_by: creatorUuid,
-          cutoff_date: cutOff.DDMMYYYY,
-        },
-        { timeout: 30000 }
-      );
+      try {
+        await axios.post(
+          prodUrl,
+          {
+            process_id: batchResult.processId,
+            bill_order_number: batchResult.billOrderNumber,
+            task_program: 'BIP',
+            bill_mode: 'Production',
+            bill_cycle: batchResult.billCycle,
+            create_by: creatorUuid,
+            cutoff_date: cutOff.DDMMYYYY,
+          },
+          { timeout: 30000 }
+        );
 
-      batchResult.stepStatus.GentProduction = 'success';
+        // รอระบบ OPS ประมวลผล Production ให้เสร็จสมบูรณ์ (Finish)
+        for (let prodWait = 1; prodWait <= 40; prodWait++) {
+          if (!activeRuns.has(sessionId)) {
+            throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+          }
+          await sleep(2000);
+          try {
+            const bipRes = await axios.post(
+              `${baseUrl}/api/v1/gentBIP/getBIP`,
+              { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
+              { timeout: 15000 }
+            );
+            const items = bipRes.data?.result || [];
+            const matched = items.find(
+              (item) => String(item.processId) === String(batchResult.processId) ||
+                        String(item.billOrderNumber) === String(batchResult.billOrderNumber)
+            );
+            if (matched) {
+              if (matched.errMessage) {
+                throw new Error(matched.errMessage);
+              }
+              if (matched.status === 'Finish' || (matched.status && !matched.status.toLowerCase().includes('progress'))) {
+                break;
+              }
+            }
+          } catch (e) {
+            if (e.message && !e.message.includes('timeout') && !e.message.includes('Network Error')) {
+              throw e;
+            }
+          }
+        }
 
-      sendEvent(sessionId, {
-        type: 'step_done',
-        step: 'GentProduction',
-        status: 'success',
-        data: { billMode: 'Production', processId: batchResult.processId, billOrderNumber: batchResult.billOrderNumber },
-      });
+        batchResult.stepStatus.GentProduction = 'success';
+
+        sendEvent(sessionId, {
+          type: 'step_done',
+          step: 'GentProduction',
+          status: 'success',
+          data: { billMode: 'Production', processId: batchResult.processId, billOrderNumber: batchResult.billOrderNumber },
+        });
+      } catch (prodErr) {
+        const errMsg = prodErr.response?.data?.message || prodErr.message || 'Production Failed';
+        console.warn(`[GentProduction Error] ${errMsg}`);
+        batchResult.stepStatus.GentProduction = 'error';
+        sendEvent(sessionId, {
+          type: 'step_done',
+          step: 'GentProduction',
+          status: 'error',
+          message: errMsg,
+        });
+        throw new Error(`GentProduction: ${errMsg}`);
+      }
     }
 
     batchResult.status = 'success';

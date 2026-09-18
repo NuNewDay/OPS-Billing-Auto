@@ -1399,6 +1399,25 @@ app.post('/api/run', async (req, res) => {
 
         // Build result Excel
         const wb = xlsx.utils.book_new();
+
+        // ── Sheet 1: Summary (BA, Bill Order Number)
+        const summaryData = [
+          ['BA', 'Bill Order Number'],
+        ];
+        for (const r of results) {
+          summaryData.push([
+            String(r.ba || ''),
+            String(r.billOrderNumber || ''),
+          ]);
+        }
+        const summaryWs = xlsx.utils.aoa_to_sheet(summaryData);
+        summaryWs['!cols'] = [
+          { wch: 18 },
+          { wch: 32 },
+        ];
+        xlsx.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+        // ── Sheet 2: Results (Full Details)
         const wsData = [
           ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Proforma Seq', 'Status', 'Error'],
         ];
@@ -1481,6 +1500,30 @@ app.post('/api/run', async (req, res) => {
 
         // Build result Excel
         const wb = xlsx.utils.book_new();
+
+        // ── Sheet 1: Summary (BA, Bill Order Number)
+        const summaryData = [
+          ['BA', 'Bill Order Number'],
+        ];
+        for (const r of batchResult.items) {
+          summaryData.push([
+            String(r.ba || ''),
+            String(r.billOrderNumber || batchResult.billOrderNumber || ''),
+          ]);
+        }
+        if (summaryData.length === 1) {
+          for (const ba of baList) {
+            summaryData.push([String(ba), String(batchResult.billOrderNumber || '')]);
+          }
+        }
+        const summaryWs = xlsx.utils.aoa_to_sheet(summaryData);
+        summaryWs['!cols'] = [
+          { wch: 18 },
+          { wch: 32 },
+        ];
+        xlsx.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+        // ── Sheet 2: Results (Full Details)
         const wsData = [
           ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Proforma Seq', 'Status', 'Error'],
         ];

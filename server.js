@@ -211,14 +211,12 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
     cutOffDate: '',
     processId: '',
     billOrderNumber: '',
-    proformaSeq: '',
     status: 'running',
     error: '',
     stepStatus: {
       checkBillingAccountNew: 'pending',
       GentAcc: 'pending',
       getBIP: 'pending',
-      GentProforma: 'pending',
       GentProduction: 'pending',
     },
   };
@@ -283,7 +281,7 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
         step: 'getBIP',
         message: `[${ba}] (โหมดจำลอง) ตรวจสอบสถานะ BIP (Process ID: ${processId})...`,
       });
-      await sleep(1000);
+      await sleep(1200);
 
       result.stepStatus.getBIP = 'success';
       sendEvent(sessionId, {
@@ -296,46 +294,26 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
 
       const billMode = (config.billMode && config.billMode.trim())
         ? config.billMode.trim()
-        : 'Auto';
+        : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
 
-      if (billMode !== 'Production') {
-        sendEvent(sessionId, {
-          type: 'step_start',
-          ba,
-          step: 'GentProforma',
-          message: `[${ba}] (โหมดจำลอง) ออกบิลร่าง [Proforma]...`,
-        });
-        await sleep(500);
-        result.proformaSeq = '1';
-        result.stepStatus.GentProforma = 'success';
-        sendEvent(sessionId, {
-          type: 'step_done',
-          ba,
-          step: 'GentProforma',
-          status: 'success',
-          data: { proformaSeq: '1', processId, billOrderNumber },
-        });
-      }
+      sendEvent(sessionId, {
+        type: 'step_start',
+        ba,
+        step: 'GentProduction',
+        message: `[${ba}] (โหมดจำลอง) ออกบิล [${billMode}]...`,
+      });
+      await sleep(600);
 
-      if (billMode !== 'Proforma') {
-        sendEvent(sessionId, {
-          type: 'step_start',
-          ba,
-          step: 'GentProduction',
-          message: `[${ba}] (โหมดจำลอง) ยืนยันออกบิลจริง [Production]...`,
-        });
-        await sleep(500);
-        result.stepStatus.GentProduction = 'success';
-        sendEvent(sessionId, {
-          type: 'step_done',
-          ba,
-          step: 'GentProduction',
-          status: 'success',
-          data: { billMode: 'Production', processId, billOrderNumber },
-        });
-      }
-
+      result.stepStatus.GentProduction = 'success';
       result.status = 'success';
+
+      sendEvent(sessionId, {
+        type: 'step_done',
+        ba,
+        step: 'GentProduction',
+        status: 'success',
+        data: { billMode, processId, billOrderNumber },
+      });
 
       sendEvent(sessionId, {
         type: 'ba_complete',
@@ -546,90 +524,43 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
       throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
     }
 
-    // ── STEP 4 & 5: GentProforma ➔ GentProduction
+    // ── STEP 4: GentProduction / Proforma
     const billMode = (config.billMode && config.billMode.trim())
       ? config.billMode.trim()
-      : 'Auto';
+      : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
     const prodUrl = `${baseUrl}/api/v1/invoicing/insertOPSInvoice`;
 
-    // Step 4: GentProforma (รันเมื่อโหมดเป็น Auto หรือ Proforma)
-    if (billMode !== 'Production') {
-      sendEvent(sessionId, {
-        type: 'step_start',
-        ba,
-        step: 'GentProforma',
-        message: `[${ba}] ออกบิลร่าง [Proforma] คำนวณยอดเงิน (Process ID: ${result.processId})...`,
-      });
+    sendEvent(sessionId, {
+      type: 'step_start',
+      ba,
+      step: 'GentProduction',
+      message: `[${ba}] ออกบิล [${billMode}] ยืนยัน Process ID: ${result.processId}...`,
+    });
 
-      try {
-        const pfRes = await axios.post(
-          prodUrl,
-          {
-            process_id: result.processId,
-            bill_order_number: result.billOrderNumber,
-            task_program: 'BIP',
-            bill_mode: 'Proforma',
-            bill_cycle: result.billCycle,
-            create_by: creatorUuid,
-            cutoff_date: cutOff.DDMMYYYY,
-          },
-          { timeout: 30000 }
-        );
-        result.proformaSeq = pfRes.data?.result?.proformaSeq || '1';
-        result.stepStatus.GentProforma = 'success';
-      } catch (pfErr) {
-        console.warn(`[${ba}] [GentProforma Warning] ${pfErr.message}. Proceeding...`);
-        result.proformaSeq = '-';
-        result.stepStatus.GentProforma = 'warning';
-      }
+    await axios.post(
+      prodUrl,
+      {
+        process_id: result.processId,
+        bill_order_number: result.billOrderNumber,
+        task_program: 'BIP',
+        bill_mode: billMode,
+        bill_cycle: result.billCycle,
+        create_by: creatorUuid,
+        cutoff_date: cutOff.DDMMYYYY,
+      },
+      { timeout: 30000 }
+    );
 
-      sendEvent(sessionId, {
-        type: 'step_done',
-        ba,
-        step: 'GentProforma',
-        status: 'success',
-        data: { proformaSeq: result.proformaSeq, processId: result.processId, billOrderNumber: result.billOrderNumber },
-      });
-
-      if (!activeRuns.has(sessionId)) {
-        throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
-      }
-    }
-
-    // Step 5: GentProduction (รันเมื่อโหมดเป็น Auto หรือ Production)
-    if (billMode !== 'Proforma') {
-      sendEvent(sessionId, {
-        type: 'step_start',
-        ba,
-        step: 'GentProduction',
-        message: `[${ba}] ยืนยันออกบิลจริง [Production] (Process ID: ${result.processId})...`,
-      });
-
-      await axios.post(
-        prodUrl,
-        {
-          process_id: result.processId,
-          bill_order_number: result.billOrderNumber,
-          task_program: 'BIP',
-          bill_mode: 'Production',
-          bill_cycle: result.billCycle,
-          create_by: creatorUuid,
-          cutoff_date: cutOff.DDMMYYYY,
-        },
-        { timeout: 30000 }
-      );
-
-      result.stepStatus.GentProduction = 'success';
-      sendEvent(sessionId, {
-        type: 'step_done',
-        ba,
-        step: 'GentProduction',
-        status: 'success',
-        data: { billMode: 'Production', processId: result.processId, billOrderNumber: result.billOrderNumber },
-      });
-    }
-
+    result.stepStatus.GentProduction = 'success';
     result.status = 'success';
+
+    sendEvent(sessionId, {
+      type: 'step_done',
+      ba,
+      step: 'GentProduction',
+      status: 'success',
+      data: { billMode, processId: result.processId, billOrderNumber: result.billOrderNumber },
+    });
 
     sendEvent(sessionId, {
       type: 'ba_complete',
@@ -685,14 +616,12 @@ async function runBatchBillingFlow(baList, config, sessionId) {
     cutOffDate: '',
     processId: '',
     billOrderNumber: '',
-    proformaSeq: '',
     status: 'running',
     error: '',
     stepStatus: {
       checkBillingAccountNew: 'pending',
       GentAcc: 'pending',
       getBIP: 'pending',
-      GentProforma: 'pending',
       GentProduction: 'pending',
     },
     items: [], // individual rows for Excel export
@@ -751,7 +680,7 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         step: 'getBIP',
         message: `(โหมดจำลอง) รอ 2 วินาที แล้วตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
       });
-      await sleep(1500);
+      await sleep(2000);
       batchResult.stepStatus.getBIP = 'success';
 
       sendEvent(sessionId, {
@@ -763,42 +692,24 @@ async function runBatchBillingFlow(baList, config, sessionId) {
 
       const billMode = (config.billMode && config.billMode.trim())
         ? config.billMode.trim()
-        : 'Auto';
+        : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
 
-      if (billMode !== 'Production') {
-        sendEvent(sessionId, {
-          type: 'step_start',
-          step: 'GentProforma',
-          message: `(โหมดจำลอง) ออกบิลร่าง [Proforma] (1 บิล ${count} BA)...`,
-        });
-        await sleep(600);
-        batchResult.proformaSeq = '1';
-        batchResult.stepStatus.GentProforma = 'success';
-        sendEvent(sessionId, {
-          type: 'step_done',
-          step: 'GentProforma',
-          status: 'success',
-          data: { proformaSeq: '1', processId, billOrderNumber },
-        });
-      }
+      sendEvent(sessionId, {
+        type: 'step_start',
+        step: 'GentProduction',
+        message: `(โหมดจำลอง) ยืนยันออกบิล [${billMode}]...`,
+      });
+      await sleep(800);
 
-      if (billMode !== 'Proforma') {
-        sendEvent(sessionId, {
-          type: 'step_start',
-          step: 'GentProduction',
-          message: `(โหมดจำลอง) ยืนยันออกบิลจริง [Production] (1 บิล ${count} BA)...`,
-        });
-        await sleep(600);
-        batchResult.stepStatus.GentProduction = 'success';
-        sendEvent(sessionId, {
-          type: 'step_done',
-          step: 'GentProduction',
-          status: 'success',
-          data: { billMode: 'Production', processId, billOrderNumber },
-        });
-      }
-
+      batchResult.stepStatus.GentProduction = 'success';
       batchResult.status = 'success';
+
+      sendEvent(sessionId, {
+        type: 'step_done',
+        step: 'GentProduction',
+        status: 'success',
+        data: { billMode, processId, billOrderNumber },
+      });
 
       for (const ba of baList) {
         batchResult.items.push({
@@ -809,7 +720,6 @@ async function runBatchBillingFlow(baList, config, sessionId) {
           cutOffDate: batchResult.cutOffDate,
           processId: batchResult.processId,
           billOrderNumber: batchResult.billOrderNumber,
-          proformaSeq: batchResult.proformaSeq,
           status: 'success',
           error: '',
         });
@@ -1001,86 +911,41 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
     }
 
-    // ── STEP 4 & 5: GentProforma ➔ GentProduction
+    // ── STEP 4: GentProduction / Proforma
     const billMode = (config.billMode && config.billMode.trim())
       ? config.billMode.trim()
-      : 'Auto';
+      : (String(environment).toLowerCase().includes('proforma') ? 'Proforma' : 'Production');
     const prodUrl = `${baseUrl}/api/v1/invoicing/insertOPSInvoice`;
 
-    // Step 4: GentProforma (รันเมื่อโหมดเป็น Auto หรือ Proforma)
-    if (billMode !== 'Production') {
-      sendEvent(sessionId, {
-        type: 'step_start',
-        step: 'GentProforma',
-        message: `ออกบิลร่าง [Proforma] คำนวณยอดเงิน (Process ID: ${batchResult.processId}, 1 บิล ${count} BA)...`,
-      });
+    sendEvent(sessionId, {
+      type: 'step_start',
+      step: 'GentProduction',
+      message: `ออกบิล [${billMode}] ยืนยัน Process ID: ${batchResult.processId} (1 บิล ${count} BA)...`,
+    });
 
-      try {
-        const pfRes = await axios.post(
-          prodUrl,
-          {
-            process_id: batchResult.processId,
-            bill_order_number: batchResult.billOrderNumber,
-            task_program: 'BIP',
-            bill_mode: 'Proforma',
-            bill_cycle: batchResult.billCycle,
-            create_by: creatorUuid,
-            cutoff_date: cutOff.DDMMYYYY,
-          },
-          { timeout: 30000 }
-        );
-        batchResult.proformaSeq = pfRes.data?.result?.proformaSeq || '1';
-        batchResult.stepStatus.GentProforma = 'success';
-      } catch (pfErr) {
-        console.warn(`[GentProforma Warning] ${pfErr.message}. Proceeding...`);
-        batchResult.proformaSeq = '-';
-        batchResult.stepStatus.GentProforma = 'warning';
-      }
+    await axios.post(
+      prodUrl,
+      {
+        process_id: batchResult.processId,
+        bill_order_number: batchResult.billOrderNumber,
+        task_program: 'BIP',
+        bill_mode: billMode,
+        bill_cycle: batchResult.billCycle,
+        create_by: creatorUuid,
+        cutoff_date: cutOff.DDMMYYYY,
+      },
+      { timeout: 30000 }
+    );
 
-      sendEvent(sessionId, {
-        type: 'step_done',
-        step: 'GentProforma',
-        status: 'success',
-        data: { proformaSeq: batchResult.proformaSeq, processId: batchResult.processId, billOrderNumber: batchResult.billOrderNumber },
-      });
-
-      if (!activeRuns.has(sessionId)) {
-        throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
-      }
-    }
-
-    // Step 5: GentProduction (รันเมื่อโหมดเป็น Auto หรือ Production)
-    if (billMode !== 'Proforma') {
-      sendEvent(sessionId, {
-        type: 'step_start',
-        step: 'GentProduction',
-        message: `ยืนยันออกบิลจริง [Production] (Process ID: ${batchResult.processId}, 1 บิล ${count} BA)...`,
-      });
-
-      await axios.post(
-        prodUrl,
-        {
-          process_id: batchResult.processId,
-          bill_order_number: batchResult.billOrderNumber,
-          task_program: 'BIP',
-          bill_mode: 'Production',
-          bill_cycle: batchResult.billCycle,
-          create_by: creatorUuid,
-          cutoff_date: cutOff.DDMMYYYY,
-        },
-        { timeout: 30000 }
-      );
-
-      batchResult.stepStatus.GentProduction = 'success';
-      sendEvent(sessionId, {
-        type: 'step_done',
-        step: 'GentProduction',
-        status: 'success',
-        data: { billMode: 'Production', processId: batchResult.processId, billOrderNumber: batchResult.billOrderNumber },
-      });
-    }
-
+    batchResult.stepStatus.GentProduction = 'success';
     batchResult.status = 'success';
+
+    sendEvent(sessionId, {
+      type: 'step_done',
+      step: 'GentProduction',
+      status: 'success',
+      data: { billMode, processId: batchResult.processId, billOrderNumber: batchResult.billOrderNumber },
+    });
 
     // Build items for all BAs in this file (they all share this 1 bill order)
     const checkedMap = new Map((checkRes.data?.result || []).map(r => [String(r.billingAccount || ''), r]));
@@ -1094,7 +959,6 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         cutOffDate: itemData.cutOffDate || batchResult.cutOffDate,
         processId: batchResult.processId,
         billOrderNumber: batchResult.billOrderNumber,
-        proformaSeq: batchResult.proformaSeq,
         status: 'success',
         error: '',
       });
@@ -1199,7 +1063,7 @@ app.post('/api/run', async (req, res) => {
         // Build result Excel
         const wb = xlsx.utils.book_new();
         const wsData = [
-          ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Proforma Seq', 'Status', 'Error'],
+          ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
         ];
 
         for (const r of results) {
@@ -1211,7 +1075,6 @@ app.post('/api/run', async (req, res) => {
             r.cutOffDate,
             r.processId,
             r.billOrderNumber,
-            r.proformaSeq || '-',
             r.status === 'success' ? 'Success ✅' : 'Failed ❌',
             r.error || '',
           ]);
@@ -1220,7 +1083,7 @@ app.post('/api/run', async (req, res) => {
         const ws = xlsx.utils.aoa_to_sheet(wsData);
         ws['!cols'] = [
           { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
-          { wch: 20 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 40 },
+          { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
         ];
         xlsx.utils.book_append_sheet(wb, ws, 'Results');
 
@@ -1281,7 +1144,7 @@ app.post('/api/run', async (req, res) => {
         // Build result Excel
         const wb = xlsx.utils.book_new();
         const wsData = [
-          ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Proforma Seq', 'Status', 'Error'],
+          ['BA', 'Billing Account', 'Bill Cycle', 'Bill Group', 'Cut Off Date', 'Process ID', 'Bill Order Number', 'Status', 'Error'],
         ];
 
         for (const r of batchResult.items) {
@@ -1293,7 +1156,6 @@ app.post('/api/run', async (req, res) => {
             r.cutOffDate,
             r.processId,
             r.billOrderNumber,
-            r.proformaSeq || batchResult.proformaSeq || '-',
             r.status === 'success' ? 'Success ✅' : 'Failed ❌',
             r.error || '',
           ]);
@@ -1302,7 +1164,7 @@ app.post('/api/run', async (req, res) => {
         const ws = xlsx.utils.aoa_to_sheet(wsData);
         ws['!cols'] = [
           { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
-          { wch: 20 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 40 },
+          { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 40 },
         ];
         xlsx.utils.book_append_sheet(wb, ws, 'Results');
 

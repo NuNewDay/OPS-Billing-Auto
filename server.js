@@ -588,6 +588,31 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
 
         const pfSeq = pfRes.data?.result?.proformaSeq;
         if (pfSeq != null) result.proformaSeq = pfSeq;
+
+        if (shouldRunProduction) {
+          // รอให้สถานะ Proforma ใน OPS ประมวลผลเสร็จ (Finish) ก่อนปิดสเต็ป Proforma
+          for (let pfWait = 1; pfWait <= 8; pfWait++) {
+            if (!activeRuns.has(sessionId)) {
+              throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+            }
+            await sleep(1500);
+            try {
+              const bipRes = await axios.post(
+                `${baseUrl}/api/v1/gentBIP/getBIP`,
+                { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
+                { timeout: 15000 }
+              );
+              const items = bipRes.data?.result || [];
+              const matched = items.find(
+                (item) => String(item.processId) === String(result.processId)
+              );
+              if (matched && matched.status === 'Finish' && matched.billMode === 'Proforma') {
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+
         result.stepStatus.GentProforma = 'success';
 
         sendEvent(sessionId, {
@@ -609,37 +634,6 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
           message: errMsg,
         });
         throw new Error(`[${ba}] GentProforma: ${errMsg}`);
-      }
-
-      if (shouldRunProduction) {
-        // รอให้สถานะ Proforma ใน OPS ประมวลผลเสร็จ (Finish) ก่อนยิง Production ต่อ
-        sendEvent(sessionId, {
-          type: 'step_start',
-          ba,
-          step: 'GentProforma',
-          message: `[${ba}] รอระบบ OPS ประมวลผล Proforma ให้เสร็จสมบูรณ์ก่อนเข้าสู่ Production...`,
-        });
-
-        for (let pfWait = 1; pfWait <= 8; pfWait++) {
-          if (!activeRuns.has(sessionId)) {
-            throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
-          }
-          await sleep(1500);
-          try {
-            const bipRes = await axios.post(
-              `${baseUrl}/api/v1/gentBIP/getBIP`,
-              { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
-              { timeout: 15000 }
-            );
-            const items = bipRes.data?.result || [];
-            const matched = items.find(
-              (item) => String(item.processId) === String(result.processId)
-            );
-            if (matched && matched.status === 'Finish' && matched.billMode === 'Proforma') {
-              break;
-            }
-          } catch (e) {}
-        }
       }
     }
 
@@ -1002,13 +996,6 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
     }
 
-    // ── STEP 3: getBIP (Wait 1.5s instead of 5s)
-    sendEvent(sessionId, {
-      type: 'step_start',
-      step: 'getBIP',
-      message: `ตรวจสอบสถานะงาน BIP (Process ID: ${processId})...`,
-    });
-
     // ── STEP 3: getBIP — รอจนกว่าสถานะ GentAcc ใน OPS จะเป็น Finish
     sendEvent(sessionId, {
       type: 'step_start',
@@ -1101,6 +1088,31 @@ async function runBatchBillingFlow(baList, config, sessionId) {
 
         const pfSeq = pfRes.data?.result?.proformaSeq;
         if (pfSeq != null) batchResult.proformaSeq = pfSeq;
+
+        if (shouldRunProduction) {
+          // รอให้สถานะ Proforma ใน OPS ประมวลผลเสร็จ (Finish) ก่อนปิดสเต็ป Proforma
+          for (let pfWait = 1; pfWait <= 8; pfWait++) {
+            if (!activeRuns.has(sessionId)) {
+              throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
+            }
+            await sleep(1500);
+            try {
+              const bipRes = await axios.post(
+                `${baseUrl}/api/v1/gentBIP/getBIP`,
+                { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
+                { timeout: 15000 }
+              );
+              const items = bipRes.data?.result || [];
+              const matched = items.find(
+                (item) => String(item.processId) === String(batchResult.processId)
+              );
+              if (matched && matched.status === 'Finish' && matched.billMode === 'Proforma') {
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+
         batchResult.stepStatus.GentProforma = 'success';
 
         sendEvent(sessionId, {
@@ -1120,36 +1132,6 @@ async function runBatchBillingFlow(baList, config, sessionId) {
           message: errMsg,
         });
         throw new Error(`GentProforma: ${errMsg}`);
-      }
-
-      if (shouldRunProduction) {
-        // รอให้สถานะ Proforma ใน OPS ประมวลผลเสร็จ (Finish) ก่อนยิง Production ต่อ
-        sendEvent(sessionId, {
-          type: 'step_start',
-          step: 'GentProforma',
-          message: `รอระบบ OPS ประมวลผล Proforma ให้เสร็จสมบูรณ์ก่อนเข้าสู่ Production...`,
-        });
-
-        for (let pfWait = 1; pfWait <= 8; pfWait++) {
-          if (!activeRuns.has(sessionId)) {
-            throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
-          }
-          await sleep(1500);
-          try {
-            const bipRes = await axios.post(
-              `${baseUrl}/api/v1/gentBIP/getBIP`,
-              { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
-              { timeout: 15000 }
-            );
-            const items = bipRes.data?.result || [];
-            const matched = items.find(
-              (item) => String(item.processId) === String(batchResult.processId)
-            );
-            if (matched && matched.status === 'Finish' && matched.billMode === 'Proforma') {
-              break;
-            }
-          } catch (e) {}
-        }
       }
     }
 

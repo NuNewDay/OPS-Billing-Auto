@@ -168,11 +168,21 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   }
 });
 
+// Normalize base URL: maps /OPS to /OpsService on PROD and strips /home
+function resolveBaseUrl(url02) {
+  let url = (url02 || '').trim().replace(/\/home\/?$/i, '').replace(/\/+$/, '');
+  // On PROD, the web UI path is /OPS, but the backend API service is mounted at /OpsService
+  if (url.endsWith('/OPS')) {
+    url = url.replace(/\/OPS$/i, '/OpsService');
+  }
+  return url;
+}
+
 // Health check for URL02 endpoint
 app.post('/api/health-check', async (req, res) => {
   const { url02 } = req.body;
   if (!url02) return res.status(400).json({ ok: false, message: 'ไม่ได้ระบุ URL' });
-  const baseUrl = url02.trim().replace(/\/home\/?$/i, '').replace(/\/+$/, '');
+  const baseUrl = resolveBaseUrl(url02);
   try {
     const startTime = Date.now();
     const response = await axios.get(baseUrl, { timeout: 4000, validateStatus: () => true });
@@ -198,10 +208,7 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
   const creatorUuid = (uuid || '').trim() || 'f6c369a9-2197-45e5-a0b1-26aaba878703';
   const creatorName = (createBy || '').trim() || 'นาย ทดสอบ SSO';
 
-  const baseUrl = (url02 || '')
-    .trim()
-    .replace(/\/home\/?$/i, '')
-    .replace(/\/+$/, '');
+  const baseUrl = resolveBaseUrl(url02);
 
   const result = {
     ba,
@@ -770,11 +777,7 @@ async function runBatchBillingFlow(baList, config, sessionId) {
   const creatorUuid = (uuid || '').trim() || 'f6c369a9-2197-45e5-a0b1-26aaba878703';
   const creatorName = (createBy || '').trim() || 'นาย ทดสอบ SSO';
 
-  // Normalize base URL: ตัด /home หรือ trailing slash ออกอัตโนมัติ
-  const baseUrl = (url02 || '')
-    .trim()
-    .replace(/\/home\/?$/i, '')
-    .replace(/\/+$/, '');
+  const baseUrl = resolveBaseUrl(url02);
 
   const count = baList.length;
 

@@ -819,27 +819,48 @@
       <div class="card">
         <div class="card-title">⚙️ ตั้งค่า API</div>
 
+        <!-- Quick Environment Switcher -->
+        <div style="display: flex; gap: 8px; margin-bottom: 14px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--border);">
+          <button type="button" id="env-pill-sit" onclick="setGlobalEnvironment('SIT')"
+            style="flex: 1; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--accent); background: rgba(79, 158, 255, 0.15); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span>🧪</span> <span>SIT (ทดสอบ)</span>
+          </button>
+          <button type="button" id="env-pill-prod" onclick="setGlobalEnvironment('PROD')"
+            style="flex: 1; padding: 7px 12px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span>🚀</span> <span>PROD (ระบบจริง)</span>
+          </button>
+        </div>
+
         <div class="field">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <label>🌐 LINK OPS หน้าเว็บ</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+            <label style="margin-bottom:0;">🌐 LINK OPS หน้าเว็บ</label>
             <button type="button" onclick="checkApiHealth()" id="health-btn"
               style="background:none; border:none; color:var(--accent); font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">
               🩺 ตรวจสอบการเชื่อมต่อ
             </button>
           </div>
-          <input type="text" id="cfg-url02" placeholder="http://10.44.82.57/OPS_SIT/home"
-            value="http://10.44.82.57/OPS_SIT/home" />
-          <div id="health-res" style="font-size:11px; margin-top:3px; display:none;"></div>
+          <div style="display: flex; gap: 8px;">
+            <select id="sel-url02" onchange="onUrl02SelectChange(this.value)" style="flex: 0 0 110px; font-size: 12px; font-weight: 600;">
+              <option value="SIT" selected>SIT</option>
+              <option value="PROD">PROD</option>
+              <option value="CUSTOM">กำหนดเอง</option>
+            </select>
+            <input type="text" id="cfg-url02" placeholder="http://10.44.82.57/OPS_SIT/home"
+              value="http://10.44.82.57/OPS_SIT/home" style="flex: 1;" oninput="onUrl02Input()" />
+          </div>
+          <div id="health-res" style="font-size:11px; margin-top:4px; display:none;"></div>
         </div>
 
         <div class="field">
-          <label>🏭 Environment SIT</label>
-          <input type="text" id="cfg-env" list="env-list" value="10.44.82.106:7500" placeholder="10.44.82.106:7500" />
-          <datalist id="env-list">
-            <option value="10.44.82.106:7500">DEV — 10.44.82.106:7500</option>
-            <option value="SIT">SIT — 10.44.82.57</option>
-            <option value="Production">Production — bac-prod.itbc.intra.ntplc.co.th</option>
-          </datalist>
+          <label style="margin-bottom: 6px;">🏭 Environment</label>
+          <div style="display: flex; gap: 8px;">
+            <select id="sel-env" onchange="onEnvSelectChange(this.value)" style="flex: 0 0 110px; font-size: 12px; font-weight: 600;">
+              <option value="SIT" selected>SIT</option>
+              <option value="PROD">PROD</option>
+              <option value="CUSTOM">กำหนดเอง</option>
+            </select>
+            <input type="text" id="cfg-env" value="10.44.82.106:7500" placeholder="10.44.82.106:7500" style="flex: 1;" oninput="onEnvInput()" />
+          </div>
         </div>
 
         <div class="field">
@@ -1328,6 +1349,121 @@
       showAlert('upload-success', `🧪 โหลดข้อมูลทดสอบสำเร็จ — พบ ${sampleBAs.length} BA พร้อมรัน`, true);
       enableRunButtons(true);
       log('info', `🧪 โหลดชุดข้อมูลทดสอบ ${sampleBAs.length} BA เข้าสู่ระบบเรียบร้อย`);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Environment & URL Presets (SIT / PROD)
+    // ═══════════════════════════════════════════════════════
+    const OPS_URLS = {
+      SIT: 'http://10.44.82.57/OPS_SIT/home',
+      PROD: 'http://10.44.81.82/OPS/home',
+    };
+
+    const ENV_HOSTS = {
+      SIT: '10.44.82.106:7500',
+      PROD: '10.44.81.30:7500',
+    };
+
+    function setGlobalEnvironment(env) {
+      const isSIT = env === 'SIT';
+      const sitBtn = document.getElementById('env-pill-sit');
+      const prodBtn = document.getElementById('env-pill-prod');
+      if (sitBtn && prodBtn) {
+        if (isSIT) {
+          sitBtn.style.border = '1px solid var(--accent)';
+          sitBtn.style.background = 'rgba(79, 158, 255, 0.15)';
+          sitBtn.style.color = 'var(--accent)';
+          prodBtn.style.border = '1px solid transparent';
+          prodBtn.style.background = 'transparent';
+          prodBtn.style.color = 'var(--text-2)';
+        } else {
+          prodBtn.style.border = '1px solid #10b981';
+          prodBtn.style.background = 'rgba(16, 185, 129, 0.15)';
+          prodBtn.style.color = '#10b981';
+          sitBtn.style.border = '1px solid transparent';
+          sitBtn.style.background = 'transparent';
+          sitBtn.style.color = 'var(--text-2)';
+        }
+      }
+
+      const selUrl02 = document.getElementById('sel-url02');
+      const inputUrl02 = document.getElementById('cfg-url02');
+      if (selUrl02 && inputUrl02) {
+        selUrl02.value = env;
+        inputUrl02.value = OPS_URLS[env] || inputUrl02.value;
+      }
+
+      const selEnv = document.getElementById('sel-env');
+      const inputEnv = document.getElementById('cfg-env');
+      if (selEnv && inputEnv) {
+        selEnv.value = env;
+        inputEnv.value = ENV_HOSTS[env] || inputEnv.value;
+      }
+
+      log('info', `🔄 สลับระบบเป็น: [${env}] — OPS: ${OPS_URLS[env]} | Env: ${ENV_HOSTS[env]}`);
+    }
+
+    function onUrl02SelectChange(val) {
+      const input = document.getElementById('cfg-url02');
+      if (val === 'SIT') input.value = OPS_URLS.SIT;
+      else if (val === 'PROD') input.value = OPS_URLS.PROD;
+      syncGlobalEnvButtons();
+    }
+
+    function onEnvSelectChange(val) {
+      const input = document.getElementById('cfg-env');
+      if (val === 'SIT') input.value = ENV_HOSTS.SIT;
+      else if (val === 'PROD') input.value = ENV_HOSTS.PROD;
+      syncGlobalEnvButtons();
+    }
+
+    function onUrl02Input() {
+      const input = document.getElementById('cfg-url02').value.trim();
+      const sel = document.getElementById('sel-url02');
+      if (input === OPS_URLS.SIT) sel.value = 'SIT';
+      else if (input === OPS_URLS.PROD) sel.value = 'PROD';
+      else sel.value = 'CUSTOM';
+      syncGlobalEnvButtons();
+    }
+
+    function onEnvInput() {
+      const input = document.getElementById('cfg-env').value.trim();
+      const sel = document.getElementById('sel-env');
+      if (input === ENV_HOSTS.SIT) sel.value = 'SIT';
+      else if (input === ENV_HOSTS.PROD) sel.value = 'PROD';
+      else sel.value = 'CUSTOM';
+      syncGlobalEnvButtons();
+    }
+
+    function syncGlobalEnvButtons() {
+      const selUrl = document.getElementById('sel-url02')?.value;
+      const selEnv = document.getElementById('sel-env')?.value;
+      const sitBtn = document.getElementById('env-pill-sit');
+      const prodBtn = document.getElementById('env-pill-prod');
+      if (!sitBtn || !prodBtn) return;
+
+      if (selUrl === 'SIT' && selEnv === 'SIT') {
+        sitBtn.style.border = '1px solid var(--accent)';
+        sitBtn.style.background = 'rgba(79, 158, 255, 0.15)';
+        sitBtn.style.color = 'var(--accent)';
+        prodBtn.style.border = '1px solid transparent';
+        prodBtn.style.background = 'transparent';
+        prodBtn.style.color = 'var(--text-2)';
+      } else if (selUrl === 'PROD' && selEnv === 'PROD') {
+        prodBtn.style.border = '1px solid #10b981';
+        prodBtn.style.background = 'rgba(16, 185, 129, 0.15)';
+        prodBtn.style.color = '#10b981';
+        sitBtn.style.border = '1px solid transparent';
+        sitBtn.style.background = 'transparent';
+        sitBtn.style.color = 'var(--text-2)';
+      } else {
+        sitBtn.style.border = '1px solid transparent';
+        sitBtn.style.background = 'transparent';
+        sitBtn.style.color = 'var(--text-2)';
+        prodBtn.style.border = '1px solid transparent';
+        prodBtn.style.background = 'transparent';
+        prodBtn.style.color = 'var(--text-2)';
+      }
     }
 
     async function checkApiHealth() {

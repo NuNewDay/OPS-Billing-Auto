@@ -40,7 +40,8 @@ function resolveSuffix(suffixTemplate, ba, index = 1, total = 1) {
   let resolved = trimmed
     .replace(/\{ba\}/gi, ba)
     .replace(/\{index\}/gi, String(index))
-    .replace(/\{total\}/gi, String(total));
+    .replace(/\{total\}/gi, String(total))
+    .replace(/[\/\\:*?"<>|]+/g, '_'); // ตัดเครื่องหมายที่ไม่รองรับในระบบไฟล์ Linux/Windows ป้องกัน remoteBRM Error
 
   // If the template does not start with '_' or '-', prepend '_'
   if (!resolved.startsWith('_') && !resolved.startsWith('-')) {
@@ -505,12 +506,54 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
       message: `[${ba}] รอระบบ OPS ประมวลผล GentAcc ให้เสร็จสิ้น (Process ID: ${processId})...`,
     });
 
-    for (let attempt = 1; attempt <= 10; attempt++) {
+    let getBipDone = false;
+    for (let attempt = 1; attempt <= 20; attempt++) {
       if (!activeRuns.has(sessionId)) {
         throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
       }
       await sleep(1500);
 
+      // 1. ตรวจสอบสถานะจาก getGentAccInvoice (ตรวจจับ Error ของ GentAcc ได้ทันที)
+      try {
+        const gentRes = await axios.post(
+          `${baseUrl}/api/v1/invoicing/getGentAccInvoice`,
+          {
+            firstLoadPage: 'F',
+            pagination: { current: 1, pageSize: 25 },
+            sorter: {},
+          },
+          { timeout: 15000 }
+        );
+
+        const gentItems = gentRes.data?.result || [];
+        const gentMatched = Array.isArray(gentItems)
+          ? gentItems.find(
+              (item) =>
+                String(item.processId) === String(processId) ||
+                String(item.billOrderNumber) === String(billOrderNumber)
+            )
+          : null;
+
+        if (gentMatched) {
+          if (gentMatched.status === 'Error') {
+            const errDetail = gentMatched.errMessage || 'GentAcc ประมวลผลผิดพลาด';
+            throw new Error(`[${ba}] GentAcc ในระบบ OPS เกิดข้อผิดพลาด (Process ID: ${processId}): ${errDetail}`);
+          }
+          if (gentMatched.status === 'Finish' || gentMatched.statusActive === 'BIP') {
+            result.processId = gentMatched.processId || processId;
+            result.billOrderNumber = gentMatched.billOrderNumber || billOrderNumber;
+            getBipDone = true;
+            break;
+          }
+        }
+      } catch (gErr) {
+        if (gErr.message.includes('GentAcc ในระบบ OPS เกิดข้อผิดพลาด')) {
+          throw gErr;
+        }
+        console.warn(`[${ba}] [getGentAccInvoice attempt ${attempt}] ${gErr.message}`);
+      }
+
+      // 2. ตรวจสอบสถานะจาก gentBIP/getBIP ควบคู่
       try {
         const bipRes = await axios.post(
           `${baseUrl}/api/v1/gentBIP/getBIP`,
@@ -534,12 +577,38 @@ async function runIndividualBillingFlow(ba, config, sessionId, index = 1, total 
         if (matched) {
           result.processId = matched.processId || processId;
           result.billOrderNumber = matched.billOrderNumber || billOrderNumber;
+          if (matched.status === 'Error') {
+            throw new Error(`[${ba}] BIP ในระบบ OPS เกิดข้อผิดพลาด (Process ID: ${processId}): ${matched.errMessage || 'Error'}`);
+          }
           if (matched.status === 'Finish' || (matched.status && !matched.status.includes('progress'))) {
+            getBipDone = true;
             break;
           }
         }
       } catch (bipErr) {
+        if (bipErr.message.includes('BIP ในระบบ OPS เกิดข้อผิดพลาด')) {
+          throw bipErr;
+        }
         console.warn(`[${ba}] [getBIP Warning attempt ${attempt}] ${bipErr.message}. Continuing with processId ${processId}`);
+      }
+    }
+
+    if (!getBipDone) {
+      // ตรวจสอบขั้นสุดท้ายก่อนข้ามไป Proforma ว่า GentAcc error หรือไม่
+      try {
+        const finalGentRes = await axios.post(
+          `${baseUrl}/api/v1/invoicing/getGentAccInvoice`,
+          { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
+          { timeout: 10000 }
+        );
+        const finalGent = (finalGentRes.data?.result || []).find(
+          (item) => String(item.processId) === String(processId) || String(item.billOrderNumber) === String(billOrderNumber)
+        );
+        if (finalGent && finalGent.status === 'Error') {
+          throw new Error(`[${ba}] GentAcc ในระบบ OPS เกิดข้อผิดพลาด (Process ID: ${processId}): ${finalGent.errMessage || 'Error'}`);
+        }
+      } catch (fErr) {
+        if (fErr.message.includes('GentAcc ในระบบ OPS เกิดข้อผิดพลาด')) throw fErr;
       }
     }
 
@@ -1062,12 +1131,54 @@ async function runBatchBillingFlow(baList, config, sessionId) {
       message: `รอระบบ OPS ประมวลผล GentAcc ให้เสร็จสิ้น (Process ID: ${processId})...`,
     });
 
-    for (let attempt = 1; attempt <= 10; attempt++) {
+    let batchBipDone = false;
+    for (let attempt = 1; attempt <= 20; attempt++) {
       if (!activeRuns.has(sessionId)) {
         throw new Error('การทำงานถูกยกเลิกโดยผู้ใช้ (Aborted)');
       }
       await sleep(1500);
 
+      // 1. ตรวจสอบสถานะจาก getGentAccInvoice (ตรวจจับ Error ของ GentAcc ได้ทันที)
+      try {
+        const gentRes = await axios.post(
+          `${baseUrl}/api/v1/invoicing/getGentAccInvoice`,
+          {
+            firstLoadPage: 'F',
+            pagination: { current: 1, pageSize: 25 },
+            sorter: {},
+          },
+          { timeout: 15000 }
+        );
+
+        const gentItems = gentRes.data?.result || [];
+        const gentMatched = Array.isArray(gentItems)
+          ? gentItems.find(
+              (item) =>
+                String(item.processId) === String(processId) ||
+                String(item.billOrderNumber) === String(billOrderNumber)
+            )
+          : null;
+
+        if (gentMatched) {
+          if (gentMatched.status === 'Error') {
+            const errDetail = gentMatched.errMessage || 'GentAcc ประมวลผลผิดพลาด';
+            throw new Error(`GentAcc ล้มเหลวในระบบ OPS (Process ID: ${processId}): ${errDetail}`);
+          }
+          if (gentMatched.status === 'Finish' || gentMatched.statusActive === 'BIP') {
+            batchResult.processId = gentMatched.processId || processId;
+            batchResult.billOrderNumber = gentMatched.billOrderNumber || billOrderNumber;
+            batchBipDone = true;
+            break;
+          }
+        }
+      } catch (gErr) {
+        if (gErr.message.includes('GentAcc ล้มเหลวในระบบ OPS')) {
+          throw gErr;
+        }
+        console.warn(`[Batch getGentAccInvoice attempt ${attempt}] ${gErr.message}`);
+      }
+
+      // 2. ตรวจสอบสถานะจาก gentBIP/getBIP ควบคู่
       try {
         const bipRes = await axios.post(
           `${baseUrl}/api/v1/gentBIP/getBIP`,
@@ -1088,12 +1199,38 @@ async function runBatchBillingFlow(baList, config, sessionId) {
         if (matched) {
           batchResult.processId = matched.processId || processId;
           batchResult.billOrderNumber = matched.billOrderNumber || billOrderNumber;
+          if (matched.status === 'Error') {
+            throw new Error(`BIP ในระบบ OPS เกิดข้อผิดพลาด (Process ID: ${processId}): ${matched.errMessage || 'Error'}`);
+          }
           if (matched.status === 'Finish' || (matched.status && !matched.status.includes('progress'))) {
+            batchBipDone = true;
             break;
           }
         }
       } catch (bipErr) {
+        if (bipErr.message.includes('BIP ในระบบ OPS เกิดข้อผิดพลาด')) {
+          throw bipErr;
+        }
         console.warn(`[getBIP Warning attempt ${attempt}] ${bipErr.message}. Continuing with processId ${processId}`);
+      }
+    }
+
+    if (!batchBipDone) {
+      // ตรวจสอบขั้นสุดท้ายก่อนข้ามไป Proforma ว่า GentAcc error หรือไม่
+      try {
+        const finalGentRes = await axios.post(
+          `${baseUrl}/api/v1/invoicing/getGentAccInvoice`,
+          { firstLoadPage: 'F', pagination: { current: 1, pageSize: 25 }, sorter: {} },
+          { timeout: 10000 }
+        );
+        const finalGent = (finalGentRes.data?.result || []).find(
+          (item) => String(item.processId) === String(processId) || String(item.billOrderNumber) === String(billOrderNumber)
+        );
+        if (finalGent && finalGent.status === 'Error') {
+          throw new Error(`GentAcc ล้มเหลวในระบบ OPS (Process ID: ${processId}): ${finalGent.errMessage || 'Error'}`);
+        }
+      } catch (fErr) {
+        if (fErr.message.includes('GentAcc ล้มเหลวในระบบ OPS')) throw fErr;
       }
     }
 

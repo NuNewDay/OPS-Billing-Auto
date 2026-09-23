@@ -820,14 +820,15 @@
         <div class="card-title">⚙️ ตั้งค่า API</div>
 
         <!-- Quick Environment Switcher -->
-        <div style="display: flex; gap: 8px; margin-bottom: 14px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--border);">
+        <div
+          style="display: flex; gap: 8px; margin-bottom: 14px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 8px; border: 1px solid var(--border);">
           <button type="button" id="env-pill-sit" onclick="setGlobalEnvironment('SIT')"
             style="flex: 1; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--accent); background: rgba(79, 158, 255, 0.15); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
-            <span>🧪</span> <span>SIT (ทดสอบ)</span>
+            <span>🧪</span> <span>SIT</span>
           </button>
           <button type="button" id="env-pill-prod" onclick="setGlobalEnvironment('PROD')"
             style="flex: 1; padding: 7px 12px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
-            <span>🚀</span> <span>PROD (ระบบจริง)</span>
+            <span>🚀</span> <span>PROD</span>
           </button>
         </div>
 
@@ -840,7 +841,8 @@
             </button>
           </div>
           <div style="display: flex; gap: 8px;">
-            <select id="sel-url02" onchange="onUrl02SelectChange(this.value)" style="flex: 0 0 110px; font-size: 12px; font-weight: 600;">
+            <select id="sel-url02" onchange="onUrl02SelectChange(this.value)"
+              style="flex: 0 0 110px; font-size: 12px; font-weight: 600;">
               <option value="SIT" selected>SIT</option>
               <option value="PROD">PROD</option>
               <option value="CUSTOM">กำหนดเอง</option>
@@ -852,14 +854,16 @@
         </div>
 
         <div class="field">
-          <label style="margin-bottom: 6px;">🏭 Environment</label>
+          <label style="margin-bottom: 6px;">🏭 IP Environment </label>
           <div style="display: flex; gap: 8px;">
-            <select id="sel-env" onchange="onEnvSelectChange(this.value)" style="flex: 0 0 110px; font-size: 12px; font-weight: 600;">
+            <select id="sel-env" onchange="onEnvSelectChange(this.value)"
+              style="flex: 0 0 110px; font-size: 12px; font-weight: 600;">
               <option value="SIT" selected>SIT</option>
               <option value="PROD">PROD</option>
               <option value="CUSTOM">กำหนดเอง</option>
             </select>
-            <input type="text" id="cfg-env" value="10.44.82.106:7500" placeholder="10.44.82.106:7500" style="flex: 1;" oninput="onEnvInput()" />
+            <input type="text" id="cfg-env" value="10.44.82.106:7500" placeholder="10.44.82.106:7500" style="flex: 1;"
+              oninput="onEnvInput()" />
           </div>
         </div>
 
@@ -892,6 +896,7 @@
           <div style="font-size:11px; color:var(--text-3); margin-top:4px; line-height:1.4;">
             💡 เว้นว่างไว้จะสุ่ม <code>_Txxxxx</code> ให้อัตโนมัติ | ใส่ <code>{ba}</code> แทนเลข BA หรือ
             <code>{index}</code> แทนลำดับได้
+            <br/><span style="color:var(--warn, #e09f3e);">⚠️ ห้ามใช้เครื่องหมาย <code>/</code> หรือ <code>\</code> (ระบบจะแทนที่ด้วย <code>_</code> อัตโนมัติ เพื่อป้องกัน Linux OPS สร้างไฟล์ผิดพลาด)</span>
           </div>
         </div>
       </div>
@@ -1065,6 +1070,11 @@
       if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
     });
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+    document.getElementById('cfg-suffix')?.addEventListener('input', (e) => {
+      if (/[\/\\:*?"<>|]/.test(e.target.value)) {
+        e.target.value = e.target.value.replace(/[\/\\:*?"<>|]+/g, '_');
+      }
+    });
 
     function handleFile(file) {
       showAlert('upload-alert', '', false);
@@ -1513,7 +1523,12 @@
       currentBillMode = billMode;
       const user = document.getElementById('cfg-user').value.trim();
       const uuid = document.getElementById('cfg-uuid').value.trim();
-      const suffix = document.getElementById('cfg-suffix')?.value.trim() || '';
+      let suffix = document.getElementById('cfg-suffix')?.value.trim() || '';
+      if (/[\/\\:*?"<>|]/.test(suffix)) {
+        suffix = suffix.replace(/[\/\\:*?"<>|]+/g, '_');
+        const inputEl = document.getElementById('cfg-suffix');
+        if (inputEl) inputEl.value = suffix;
+      }
       const isSimulation = document.getElementById('cfg-simulation')?.checked || false;
 
       if (!isSimulation && (!url02 || url02.includes('{{'))) {

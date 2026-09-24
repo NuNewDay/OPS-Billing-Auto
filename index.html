@@ -896,7 +896,8 @@
           <div style="font-size:11px; color:var(--text-3); margin-top:4px; line-height:1.4;">
             💡 เว้นว่างไว้จะสุ่ม <code>_Txxxxx</code> ให้อัตโนมัติ | ใส่ <code>{ba}</code> แทนเลข BA หรือ
             <code>{index}</code> แทนลำดับได้
-            <br/><span style="color:var(--warn, #e09f3e);">⚠️ ห้ามใช้เครื่องหมาย <code>/</code> หรือ <code>\</code> (ระบบจะแทนที่ด้วย <code>_</code> อัตโนมัติ เพื่อป้องกัน Linux OPS สร้างไฟล์ผิดพลาด)</span>
+            <br /><span style="color:var(--warn, #e09f3e);">⚠️ ห้ามใช้เครื่องหมาย <code>/</code> หรือ <code>\</code>
+              (ระบบจะแทนที่ด้วย <code>_</code> อัตโนมัติ เพื่อป้องกัน Linux OPS สร้างไฟล์ผิดพลาด)</span>
           </div>
         </div>
       </div>
@@ -1820,9 +1821,9 @@
       const wb = XLSX.utils.book_new();
       const data = [
         ['BA_NUMBER'],
-        ['0207691327'],
-        ['0207690918'],
-        ['0207690919'],
+        [''],
+        [''],
+        [''],
       ];
       const ws = XLSX.utils.aoa_to_sheet(data);
       ws['!cols'] = [{ wch: 20 }];
